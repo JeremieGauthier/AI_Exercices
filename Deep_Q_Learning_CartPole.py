@@ -64,5 +64,41 @@ class EpsilonGreedyStrategy():
         return self.end + (self.start - self.end) * \
             math.exp(-1. * current_step * self.decay)
 
+class Agent():
+    def __init__(self, strategy, num_actions, device):
+        self. current_step  = 0
+        self.strategy = strategy
+        self.num_actions = num_actions
+        self.device
 
+    def select_action(self, state, policy_net):
+        rate = strategy.get_exploration_rate(self.current_step)
+        self.current_step += 1
+
+        if rate > random.random():
+           action = random.randrange(self.num_actions) #Explore
+           return torch.tensor([action]).to(device)
+        else:
+            with torch.no_grad():
+                return policy_net(state).argmax(dim=1).to(device) #Exploit
+
+class CartPoleEnvManager():
+    def __init__(self, device):
+        self.device = device
+        self.env = gym.make('CartPole-v0').unwrapped
+        self.env.reset()
+        self.current_screen = None
+        self.done = False
+
+    def reset(self):
+        self.env.reset()
+        self.current_screen = None
+    
+    def close(self):
+        self.env.close()
+
+    def render(self, mode="humain"):
+        return self.env.render(mode)
+
+    def num_actions_available(self):
         
