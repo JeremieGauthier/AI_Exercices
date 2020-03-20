@@ -69,18 +69,18 @@ class Agent():
         self. current_step  = 0
         self.strategy = strategy
         self.num_actions = num_actions
-        self.device
+        self.device = device
 
     def select_action(self, state, policy_net):
-        rate = strategy.get_exploration_rate(self.current_step)
+        rate = self.strategy.get_exploration_rate(self.current_step)
         self.current_step += 1
 
         if rate > random.random():
            action = random.randrange(self.num_actions) #Explore
-           return torch.tensor([action]).to(device)
+           return torch.tensor([action]).to(self.device)
         else:
             with torch.no_grad():
-                return policy_net(state).argmax(dim=1).to(device) #Exploit
+                return policy_net(state).argmax(dim=1).to(self.device) #Exploit
 
 class CartPoleEnvManager():
     def __init__(self, device):
@@ -101,4 +101,69 @@ class CartPoleEnvManager():
         return self.env.render(mode)
 
     def num_actions_available(self):
-        
+        return self.env.action_space.n
+
+    def take_action(self, action):
+        _, reward, self.done, _ = self.env.step(action.item())
+        return torch.tensor([reward], device=self.device)
+
+    def just_starting(self):
+        self.current_screen is None
+
+    def get_state(self):
+        if self.just_starting() or self.done:
+            self.current_screen = self.get_processed_screen()
+            black_screen = torch.zeros_like(self.current_screen)
+            return black_screen
+        else:
+            s1 = self.current_screen
+            s2 = self.get_processed_screen()
+            self.current_screen = s2
+            return s2 - s1
+    
+    def get_screen_hight(self):
+        screen = self.get_processed_screen()
+        return screen.shape[2]
+
+    def get_screen_width(self):
+        screen = self.get_processed_screen()
+        return screen.shape[3]
+
+    def get_processed_screen(self):
+        screen = self.render('rgb_array').transpose((2, 0, 1))
+        screen = self.crop_screen(screen)
+        return self.transform_screen_data(screen)
+
+    def crop_screen(self, screen):
+        screen_hight = screen.shape[1]
+
+        #Strip off top and bottom
+        top  = int(screen_hight * 0.4)
+        bottom = int(screen_hight * 0.8)
+        screen = screen[:, top:bottom, :]
+        return screen
+    
+    def transform_screen_data(self, screen):
+        #Convert to float, rescale, convert to tensor
+        screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
+        screen = torch.from_numpy(screen)
+
+        #Use TorchVision to compose image transforms
+        resize = T.Compose([
+            T.ToPILImage(),
+            T.Resize((40,90)),
+            T.ToTensor()
+        ])
+
+        return resize(screen).unsqueeze(0).to(self.device)
+
+if __name__ == "__main__":
+    device = torch.device("cpu")
+    em = CartPoleEnvManager(device)
+    em.reset()
+    
+    screen = em.render("rgb_array")
+    plt.imshow(screen)
+    plt.show
+    # screen = em.get_processed_screen()
+    # screen = em.get_state()
