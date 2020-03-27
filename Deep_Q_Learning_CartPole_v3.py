@@ -27,9 +27,9 @@ BATCH_SIZE = 64  # Q-learning batch size
 
 # if gpu is to be used
 use_cuda = torch.cuda.is_available()
-FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
-LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
-ByteTensor = torch.cuda.ByteTensor if use_cuda else torch.ByteTensor
+FloatTensor = torch.FloatTensor
+LongTensor = torch.LongTensor
+ByteTensor = torch.ByteTensor
 Tensor = FloatTensor
 
 
@@ -52,7 +52,7 @@ class ReplayMemory:
 
 class Network(nn.Module):
     def __init__(self):
-        nn.Module.__init__(self)
+        super().__init__(self)
         self.l1 = nn.Linear(4, HIDDEN_LAYER)
         self.l2 = nn.Linear(HIDDEN_LAYER, 2)
 

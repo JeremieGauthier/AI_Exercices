@@ -12,13 +12,6 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-env = gym.make('CartPole-v0').unwrapped
-
-resize = T.Compose([T.ToPILImage(),
-                    T.Resize(40, interpolation=Image.CUBIC),
-                    T.ToTensor()])
 # This is based on the code from gym.
 screen_width = 600
 BATCH_SIZE = 128
@@ -27,6 +20,13 @@ EPS_START = 0.4
 EPS_END = 0.05
 EPS_DECAY = 200
 TARGET_UPDATE = 10
+
+device = "cpu"
+env = gym.make('CartPole-v0').unwrapped
+
+resize = T.Compose([T.ToPILImage(),
+                    T.Resize(40, interpolation=Image.CUBIC),
+                    T.ToTensor()])
 
 
 def get_cart_location():
@@ -121,7 +121,7 @@ def optimize_model(policy_net, optimizer, memory):
 
     # Compute a mask of non-final states and concatenate the batch elements
     non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                          batch.next_state)), device=device, dtype=torch.uint8)
+                                          batch.next_state)), device=device, dtype=torch.bool)
     non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
     state_batch = torch.cat(batch.state)
     action_batch = torch.cat(batch.action)
@@ -147,15 +147,18 @@ def optimize_model(policy_net, optimizer, memory):
 
 
 def trainIters(policy_net, n_iters=60):
+
     optimizer = optim.Adam(policy_net.parameters(), lr=0.0001, weight_decay=1e-5)
     memory = ReplayMemory(10000)
+
     for iter in range(n_iters):
+
         # Initialize the environment and state
         env.reset()
         last_screen = get_screen()
         current_screen = get_screen()
         state = current_screen - last_screen
-        losses = []
+
         for t in count():
 
             action = select_action(state)
@@ -188,9 +191,10 @@ def trainIters(policy_net, n_iters=60):
 
 
 if __name__ == "__main__":
-    if os.path.exists('model/policy_net.pkl'):
-        policy_net = torch.load('model/policy_net.pkl')
-        print('Model loaded')
-    else:
-        policy_net = DQN().to(device)
+    policy_net = DQN().to(device)
     trainIters(policy_net, n_iters=50)
+
+    # if os.path.exists('model/policy_net.pkl'):
+    #     policy_net = torch.load('model/policy_net.pkl')
+    #     print('Model loaded')
+    # else:
