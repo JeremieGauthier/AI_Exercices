@@ -41,7 +41,7 @@ class LinearDeepQNetwork(nn.Module):
         self.fc2 = nn.Linear(128, n_actions)
 
         self.optimizer = optim.Adam(self.parameters(), lr=lr)
-        self.loss  = nn.MSELoss()
+        self.loss = nn.MSELoss()
         self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
         self.to(self.device)
 
@@ -52,8 +52,10 @@ class LinearDeepQNetwork(nn.Module):
         return actions
 
 class Agent():
-    def __init__(self, input_dims, batch_size, n_actions, lr, gamma=0.99,
-                epsilon=1.0, eps_dec=1e-5, eps_min=0.01, max_mem_size=1000000):
+    def __init__(self, input_dims, batch_size, n_actions, lr, replace, 
+                gamma=0.99, epsilon=1.0, eps_dec=1e-5, eps_min=0.01, 
+                max_mem_size=1000000, q_eval_fname='q_eval.h5', 
+                q_target_fname='q_target.h5'):
         
         self.lr = lr
         self.input_dims = input_dims
@@ -67,7 +69,12 @@ class Agent():
         self.memory_size = max_mem_size
         self.memory_counter = 0
 
-        self.Q = LinearDeepQNetwork(self.lr, self.n_actions, self.input_dims)
+        self.replace = replace
+        self.q_eval_model_file = q_eval_fname
+        self.q_target_model_file = q_target_fname
+
+        self.Q_eval = LinearDeepQNetwork(self.lr, self.n_actions, self.input_dims)
+        self.Q_next = LinearDeepQNetwork(self.lr, self.n_actions, self.input_dims)
 
         self.state_memory = np.zeros((self.memory_size, *self.input_dims), dtype=np.float32)
         self.new_state_memory = np.zeros((self.memory_size, *self.input_dims), dtype=np.float32)
@@ -75,6 +82,11 @@ class Agent():
         self.action_memory = np.zeros(self.memory_size, dtype=np.int32)
         self.terminal_state = np.zeros(self.memory_size, dtype=np.bool)
     
+    def replace_target_network(self):
+        self.Q_next.load_state_dict(self.Q_eval.state_dict())
+        self.Q_next.eval()
+
+
     def store_transition(self, state, action, reward, state_, done):
         index = self.memory_counter % self.memory_size
 
@@ -88,8 +100,8 @@ class Agent():
 
     def choose_action(self, observation):
         if np.random.random() > self.epsilon:
-            state = T.tensor(observation, dtype=T.float).to(self.Q.device)
-            actions = self.Q.forward(state)
+            state = T.tensor(observation, dtype=T.float).to(self.Q_eval.device)
+            actions = self.Q_eval.forward(state)
             action = T.argmax(actions).item()
         else:
             action = np.random.choice(self.action_space)
@@ -102,45 +114,46 @@ class Agent():
     
     def learn(self, state, action, reward, state_):
 
-        if self.memory_counter < self.batch_size:
-            return
+        if self.memory_counter > self.batch_size:
+            self.Q_eval.optimizer.zero_grad()
 
-        self.Q.optimizer.zero_grad()
+            max_memory = min(self.memory_counter, self.memory_size)
+            batch = np.random.choice(max_memory, self.batch_size, replace=False)
+            batch_index = np.arange(self.batch_size, dtype=np.int32)
 
-        max_memory = min(self.memory_counter, self.memory_size)
-        batch = np.random.choice(max_memory, self.batch_size, replace=False)
-        batch_index = np.arange(self.batch_size, dtype=np.int32)
+            states = T.tensor(self.state_memory[batch]).to(self.Q_eval.device)
+            actions = T.tensor(self.action_memory[batch], dtype=T.float32).to(self.Q_eval.device)
+            rewards = T.tensor(self.reward_memory[batch]).to(self.Q_eval.device)
+            states_ = T.tensor(self.new_state_memory[batch]).to(self.Q_eval.device)
+            terminal = T.tensor(self.terminal_state[batch]).to(self.Q_eval.device)
 
-        states = T.tensor(self.state_memory[batch]).to(self.Q.device)
-        actions = T.tensor(self.action_memory[batch], dtype=T.float32).to(self.Q.device)
-        rewards = T.tensor(self.reward_memory[batch]).to(self.Q.device)
-        states_ = T.tensor(self.new_state_memory[batch]).to(self.Q.device)
-        terminal = T.tensor(self.terminal_state[batch]).to(self.Q.device)
+            q_pred = self.Q_eval.forward(states)[batch_index, actions.type(T.LongTensor)]
+            q_next = self.Q_next.forward(states_)
+            q_next[terminal] = 0.0
 
-        q_pred = self.Q.forward(states)[batch_index, actions.type(T.LongTensor)]
-        q_next = self.Q.forward(states_)
-        q_next[terminal] = 0.0
+            q_target = reward + self.gamma * T.max(q_next, dim=1)[0]
 
-        q_target = reward + self.gamma * T.max(q_next, dim=1)[0]
-
-        loss = self.Q.loss(q_target, q_pred).to(self.Q.device)
-        loss.backward()
-        self.Q.optimizer.step()
-        self.decrement_epsilon()
+            loss = self.Q_eval.loss(q_target, q_pred).to(self.Q_eval.device)
+            loss.backward()
+            self.Q_eval.optimizer.step()
+            self.decrement_epsilon()
 
 if __name__ == "__main__":
 
     env = gym.make("CartPole-v1")
-    n_games = 15000
+    n_games = 8000
     scores, eps_history = [], []
    
-    agent = Agent(batch_size=64, input_dims=env.observation_space.shape, 
-                    n_actions=env.action_space.n, lr=0.0001)
+    agent = Agent(batch_size=64, input_dims=env.observation_space.shape,
+                    replace=10, n_actions=env.action_space.n, lr=0.0001)
     
     for i in range(n_games):
         score = 0
         done = False
         obs = env.reset()
+
+        if i % agent.replace == 0:
+            agent.replace_target_network()
 
         while not done:
             action = agent.choose_action(obs)
