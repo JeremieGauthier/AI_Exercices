@@ -47,28 +47,48 @@ class LinearDeepQNetwork(nn.Module):
 
     def forward(self, state):
         layer1 = F.relu(self.fc1(state))
-        action = self.fc2(layer1)
+        actions = self.fc2(layer1)
 
-        return action
+        return actions
 
 class Agent():
-    def __init__(self, input_dims, n_actions, lr, gamma=0.99,
-                epsilon=1.0, eps_dec=1e-5, eps_min=0.01):
+    def __init__(self, input_dims, batch_size, n_actions, lr, gamma=0.99,
+                epsilon=1.0, eps_dec=1e-5, eps_min=0.01, max_mem_size=1000000):
         
         self.lr = lr
         self.input_dims = input_dims
+        self.batch_size = batch_size
         self.n_actions = n_actions
         self.gamma = gamma
         self.epsilon = epsilon
         self.eps_dec = eps_dec
         self.eps_min = eps_min
         self.action_space = [i for i in range(self.n_actions)]
+        self.memory_size = max_mem_size
+        self.memory_counter = 0
 
         self.Q = LinearDeepQNetwork(self.lr, self.n_actions, self.input_dims)
 
+        self.state_memory = np.zeros((self.memory_size, *self.input_dims), dtype=np.float32)
+        self.new_state_memory = np.zeros((self.memory_size, *self.input_dims), dtype=np.float32)
+        self.reward_memory = np.zeros(self.memory_size, dtype=np.float32)
+        self.action_memory = np.zeros(self.memory_size, dtype=np.int32)
+        self.terminal_state = np.zeros(self.memory_size, dtype=np.bool)
+    
+    def store_transition(self, state, action, reward, state_, done):
+        index = self.memory_counter % self.memory_size
+
+        self.state_memory[index] = state
+        self.new_state_memory[index] = state_
+        self.reward_memory[index] = reward
+        self.action_memory[index] = action
+        self.terminal_state[index] = done
+
+        self.memory_counter += 1
+
     def choose_action(self, observation):
         if np.random.random() > self.epsilon:
-            state  = T.tensor(observation, dtype=T.float).to(self.Q.device)
+            state = T.tensor(observation, dtype=T.float).to(self.Q.device)
             actions = self.Q.forward(state)
             action = T.argmax(actions).item()
         else:
@@ -81,17 +101,27 @@ class Agent():
                 if self.epsilon > self.eps_min else self.eps_min
     
     def learn(self, state, action, reward, state_):
+
+        if self.memory_counter < self.batch_size:
+            return
+
         self.Q.optimizer.zero_grad()
-        states = T.tensor(state, dtype=T.float).to(self.Q.device)
-        actions = T.tensor(action).to(self.Q.device)
-        rewards = T.tensor(reward).to(self.Q.device)
-        states_ = T.tensor(state_, dtype=T.float).to(self.Q.device)
 
-        q_pred = self.Q.forward(states)[actions]
+        max_memory = min(self.memory_counter, self.memory_size)
+        batch = np.random.choice(max_memory, self.batch_size, replace=False)
+        batch_index = np.arange(self.batch_size, dtype=np.int32)
 
-        q_next = self.Q.forward(states_).max()
+        states = T.tensor(self.state_memory[batch]).to(self.Q.device)
+        actions = T.tensor(self.action_memory[batch], dtype=T.float32).to(self.Q.device)
+        rewards = T.tensor(self.reward_memory[batch]).to(self.Q.device)
+        states_ = T.tensor(self.new_state_memory[batch]).to(self.Q.device)
+        terminal = T.tensor(self.terminal_state[batch]).to(self.Q.device)
 
-        q_target = reward + self.gamma*q_next
+        q_pred = self.Q.forward(states)[batch_index, actions.type(T.LongTensor)]
+        q_next = self.Q.forward(states_)
+        q_next[terminal] = 0.0
+
+        q_target = reward + self.gamma * T.max(q_next, dim=1)[0]
 
         loss = self.Q.loss(q_target, q_pred).to(self.Q.device)
         loss.backward()
@@ -99,13 +129,13 @@ class Agent():
         self.decrement_epsilon()
 
 if __name__ == "__main__":
-    env = gym.make("CartPole-v1")
-    n_games = 10000
-    scores = []
-    eps_history = []
 
-    agent = Agent(input_dims=env.observation_space.shape, 
-                n_actions=env.action_space.n, lr=0.0001)
+    env = gym.make("CartPole-v1")
+    n_games = 15000
+    scores, eps_history = [], []
+   
+    agent = Agent(batch_size=64, input_dims=env.observation_space.shape, 
+                    n_actions=env.action_space.n, lr=0.0001)
     
     for i in range(n_games):
         score = 0
@@ -116,6 +146,7 @@ if __name__ == "__main__":
             action = agent.choose_action(obs)
             obs_, reward, done, info = env.step(action)
             score += reward
+            agent.store_transition(obs, action, reward, obs_, done)
             agent.learn(obs, action, reward, obs_)
             obs = obs_
         scores.append(score)
