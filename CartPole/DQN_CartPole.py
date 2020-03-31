@@ -54,8 +54,7 @@ class LinearDeepQNetwork(nn.Module):
 class Agent():
     def __init__(self, input_dims, batch_size, n_actions, lr, replace, 
                 gamma=0.99, epsilon=1.0, eps_dec=1e-5, eps_min=0.01, 
-                max_mem_size=1000000, q_eval_fname='q_eval.h5', 
-                q_target_fname='q_target.h5'):
+                max_mem_size=1000000):
         
         self.lr = lr
         self.input_dims = input_dims
@@ -68,10 +67,7 @@ class Agent():
         self.action_space = [i for i in range(self.n_actions)]
         self.memory_size = max_mem_size
         self.memory_counter = 0
-
         self.replace = replace
-        self.q_eval_model_file = q_eval_fname
-        self.q_target_model_file = q_target_fname
 
         self.Q_eval = LinearDeepQNetwork(self.lr, self.n_actions, self.input_dims)
         self.Q_next = LinearDeepQNetwork(self.lr, self.n_actions, self.input_dims)
