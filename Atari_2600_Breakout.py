@@ -99,9 +99,21 @@ class ReplayMemory():
         self.memory[self.capacity % self.count] = experience
         self.count += 1
 
+class EpsilonGreedyStrategy():
+    def __init__(self, eps_start, eps_end, eps_decay):
+        self.eps_start = eps_start
+        self.eps_end = eps_end
+        self.eps_decay = eps_decay
+
+    def get_exploration_rate(self, current_step):
+        return self.eps_end + (self.start - self.end) * \
+            math.exp(-1 * current_step * self.eps_decay)
         
 if __name__ == "__main__":
     
+    Experience = namedtuple('Experience', 
+            ('state', 'action', 'reward', 'next_state'))
+
     nb_games = 1000
     done = False
     
