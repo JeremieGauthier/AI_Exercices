@@ -7,13 +7,6 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 import numpy as np
 
-from PIL import Image
-
-class DQN(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-        self.conv = nn.Conv2d(in_channels=1)
 
 class AtariBreakoutEnvManager():
 
@@ -67,6 +60,39 @@ class AtariBreakoutEnvManager():
         img = self.get_process()
         return img.shape[3] 
 
+class DQN(nn.Module):
+    def __init__(self, height, width):
+        super(DQN, self).__init__()
+
+        self.height = height
+        self.width = width
+
+        self.conv1 = nn.Conv2d(in_channels=4, out_channels=16, kernel_size=8, stride=4)
+        self.conv2 = nn.Conv2d(in_channels=6, out_channels=32, kernel_size=4, stride=2)
+
+        #You have to respect the formula ((W-K+2P/S)+1)
+        self.fc = nn.Linear(in_features=32*9*9, out_features=256)
+        self.out = nn.Linear(in_features=256, out_features=4)
+
+    def forward(self, state):
+
+        # (1) Hidden Conv. Layer
+        self.layer1 = F.relu(self.conv1(state))
+
+        #(2) Hidden Conv. Layer
+        self.layer2 = F.relu(self.conv1(self.layer1))
+
+        #(3) Hidden Linear Layer
+        self.layer3 = self.fc(self.layer2)
+
+        #(4) Output
+        actions = self.out(self.layer3)
+
+        return actions
+
+
+
+        
 if __name__ == "__main__":
 
     
