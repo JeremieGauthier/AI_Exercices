@@ -65,13 +65,15 @@ class Agent():
         self.eps_dec = eps_dec
         self.eps_min = eps_min
         self.action_space = [i for i in range(self.n_actions)]
-        self.memory_size = max_mem_size
-        self.memory_counter = 0
-        self.replace = replace
 
+        #Policy Network and Target Network
         self.Q_eval = LinearDeepQNetwork(self.lr, self.n_actions, self.input_dims)
         self.Q_next = LinearDeepQNetwork(self.lr, self.n_actions, self.input_dims)
 
+        #Experience Memory
+        self.memory_size = max_mem_size
+        self.memory_counter = 0
+        self.replace = replace
         self.state_memory = np.zeros((self.memory_size, *self.input_dims), dtype=np.float32)
         self.new_state_memory = np.zeros((self.memory_size, *self.input_dims), dtype=np.float32)
         self.reward_memory = np.zeros(self.memory_size, dtype=np.float32)
