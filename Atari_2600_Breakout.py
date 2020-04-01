@@ -7,6 +7,8 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 import numpy as np
 
+from collections import namedtuple
+
 
 class AtariBreakoutEnvManager():
 
@@ -87,11 +89,18 @@ class DQN(nn.Module):
 
         return actions
 
-
+class ReplayMemory():
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.memory = []
+        self.count = 0
+    
+    def add_to_memory(self, experience):
+        self.memory[self.capacity % self.count] = experience
+        self.count += 1
 
         
 if __name__ == "__main__":
-
     
     nb_games = 1000
     done = False
