@@ -61,11 +61,8 @@ class AtariBreakoutEnvManager():
         return img.shape[3] 
 
 class DQN(nn.Module):
-    def __init__(self, height, width):
+    def __init__(self):
         super(DQN, self).__init__()
-
-        self.height = height
-        self.width = width
 
         self.conv1 = nn.Conv2d(in_channels=4, out_channels=16, kernel_size=8, stride=4)
         self.conv2 = nn.Conv2d(in_channels=6, out_channels=32, kernel_size=4, stride=2)
