@@ -11,7 +11,6 @@ import numpy as np
 
 from collections import namedtuple
 
-
 class AtariBreakoutEnvManager():
 
     def __init__(self, device):
@@ -30,6 +29,9 @@ class AtariBreakoutEnvManager():
 
     def close(self):
         self.env.close()
+    
+    def num_actions(self):
+        return self.env.action_space.n
 
     def get_transform(self, img):
         img = np.ascontiguousarray(img, dtype=np.float32) / 255
@@ -65,7 +67,7 @@ class AtariBreakoutEnvManager():
         return img.shape[3] 
 
 class DQN(nn.Module):
-    def __init__(self, lr, num_actions):
+    def __init__(self, num_actions, lr):
         super(DQN, self).__init__()
 
         self.conv1 = nn.Conv2d(in_channels=4, out_channels=16, kernel_size=8, stride=4)
@@ -77,9 +79,7 @@ class DQN(nn.Module):
 
         self.optimizer = optim.Adam(self.parameters(), lr=lr)
         self.loss = nn.MSELoss()
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
-        self.to(self.device)
-
+    
     def forward(self, state):
 
         # (1) Hidden Conv. Layer
@@ -124,21 +124,18 @@ class Agent():
         self.current_step = 0
         self.device = device
 
-    def choose_action(self):
+    def choose_action(self, state, policy_net):
         epsilon = self.strategy.get_exploration_rate(self.current_step)
         self.current_step += 1
 
-        if np.random.random() < epsilon:
+        if np.random.random() < epsilon:  # Explore
             action = random.randrange(self.num_actions)
             return torch.tensor([action]).to(self.device)
-        else: 
+        else:  # Exploit
             with torch.no_grad():
                 return policy_net(action).argmax(dim=1).to(self.device)
 
 
-
-
-        
 if __name__ == "__main__":
     lr = 0.001
     gamma = 0.99
@@ -150,9 +147,27 @@ if __name__ == "__main__":
     batch_size = 256
     capacity = 1000000 
 
+    Experience = namedtuple('Experience', 
+            ('state', 'action', 'reward', 'next_state'))
 
-    # Experience = namedtuple('Experience', 
-    #         ('state', 'action', 'reward', 'next_state'))
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    envmanager = AtariBreakoutEnvManager(device)
+    strategy = EpsilonGreedyStrategy(eps_start, eps_end, eps_decay)
+    agent = Agent(envmanager.num_actions(), strategy, device)
+    memory = ReplayMemory(capacity)
+
+    policy_network = DQN(envmanager.num_actions(), lr).to(device)
+    target_network = DQN(envmanager.num_actions(), lr).to(device)
+
+    target_network.load_state_dict(policy_network.state_dict())
+    target_network.eval()
+
+    for episode in range(num_episodes):
+        envmanager.reset()
+        
+
+
 
     # nb_games = 1000
     # done = False
