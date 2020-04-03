@@ -155,7 +155,7 @@ if __name__ == "__main__":
 
         while not done:
             action = agent.choose_action(obs)
-            obs_, reward, done, info = env.step(action)PyTorch Deep Learning
+            obs_, reward, done, info = env.step(action)
             score += reward
             agent.store_transition(obs, action, reward, obs_, done)
             agent.learn(obs, action, reward, obs_)

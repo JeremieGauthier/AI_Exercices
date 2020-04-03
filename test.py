@@ -80,7 +80,7 @@ if __name__ == "__main__":
     envmanager = AtariBreakoutEnvManager(device='cpu')
     memory = ReplayMemory(capacity=1000000)
 
-    nb_games = 1000
+    nb_games = 50
 
     for i in range(nb_games):
         envmanager.reset()

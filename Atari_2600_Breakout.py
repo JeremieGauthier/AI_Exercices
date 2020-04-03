@@ -10,6 +10,7 @@ import torchvision.transforms as T
 import numpy as np
 
 from collections import namedtuple
+from itertools import count
 
 class AtariBreakoutEnvManager():
 
@@ -32,6 +33,11 @@ class AtariBreakoutEnvManager():
     
     def num_actions(self):
         return self.env.action_space.n
+    
+    def get_reward(self, action):
+        #Here action must be of type torch.tensor
+        _, reward, self.done, _ = self.env.step(action.item())
+        return torch.tensor([tensor]).to(self.device)
 
     def get_transform(self, img):
         img = np.ascontiguousarray(img, dtype=np.float32) / 255
@@ -103,8 +109,15 @@ class ReplayMemory():
         self.count = 0
     
     def add_to_memory(self, experience):
-        self.memory[self.capacity % self.count] = experience
+        if len(self.memory) < self.capacity:
+            self.memory.append(experience)
+        else: 
+            self.memory[self.capacity % self.count] = experience
         self.count += 1
+
+    def sample(self, batch_size):
+        batch = 
+
 
 class EpsilonGreedyStrategy():
     def __init__(self, eps_start, eps_end, eps_decay):
@@ -165,8 +178,16 @@ if __name__ == "__main__":
 
     for episode in range(num_episodes):
         envmanager.reset()
+        state = envmanager.get_state()
         
+        for timestep in count():
+            action = agent.choose_action(state, policy_network)
+            reward = envmanager.get_reward(action)
+            next_state = envmanager.get_state()
+            memory.append(Experience(state, action, reward, next_state))
+            state = next_state
 
+            
 
 
     # nb_games = 1000
