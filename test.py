@@ -1,6 +1,8 @@
 import gym
 import torch
-import torchvision as T
+import random
+import torchvision.transforms as T
+import numpy as np
 
 from collections import namedtuple
 
@@ -75,6 +77,12 @@ class ReplayMemory():
             self.memory[self.capacity % self.count] = experience
         self.count += 1
 
+    def sample(self, batch_size):
+        return random.sample(self.memory, batch_size)
+
+    def can_provide_sample(self, batch_size):
+        return len(self.memory) >= batch_size
+
 
 if __name__ == "__main__":
     envmanager = AtariBreakoutEnvManager(device='cpu')
@@ -89,7 +97,11 @@ if __name__ == "__main__":
             # env.render(mode="human")
             action = envmanager.env.action_space.sample()
             observation, reward, done, info = envmanager.env.step(action)
+            observation = envmanager.get_process()
             memory.add_to_memory(Experience(observation, action, reward, observation))
+
+            if memory.can_provide_sample(256):
+                experiences = memory.sample(256)
             
     import ipdb; ipdb.set_trace()
     env.close()
