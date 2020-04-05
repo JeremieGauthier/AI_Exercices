@@ -167,7 +167,7 @@ class Agent():
                 return policy_net(action).argmax(dim=1).to(self.device)
 
 
-class Phi():
+class Phi(): #Store max_nb_elements consecutive observations
     def __init__(self, max_nb_elements):
         self.memory = deque()
         self.counter = 1
@@ -180,9 +180,10 @@ class Phi():
                 self.memory.popleft()
         self.memory.append(observation)
 
+    def clear_memory(self):
+        self.memory.clear()
+
             
-
-
 if __name__ == "__main__":
     lr = 0.001
     gamma = 0.99
@@ -193,6 +194,8 @@ if __name__ == "__main__":
     num_episodes = 10000
     batch_size = 256
     capacity = 1000000
+    max_nb_elements = 4
+    scores= []
 
     Experience = namedtuple('Experience',
                             ('state', 'action', 'reward', 'next_state'))
@@ -203,6 +206,7 @@ if __name__ == "__main__":
     strategy = EpsilonGreedyStrategy(eps_start, eps_end, eps_decay)
     agent = Agent(envmanager.num_actions(), strategy, device)
     memory = ReplayMemory(capacity)
+    phi = Phi(max_nb_elements)
 
     policy_network = DQN(envmanager.num_actions(), lr).to(device)
     target_network = DQN(envmanager.num_actions(), lr).to(device)
@@ -211,20 +215,26 @@ if __name__ == "__main__":
     target_network.eval()
 
     optimizer = optim.Adam(params=policy_network.parameters(), lr=lr)
-
-    scores= []
     
     for episode in range(num_episodes):
         envmanager.reset()
-        state = envmanager.get_state()
+        observation= envmanager.get_state()
+        phi.clear_memory()
+        phi.add_to_memory(observation)
+
         score = 0
+        state = None
 
         for timestep in count():
             action = agent.choose_action(state, policy_network)
             reward = envmanager.get_reward(action)
-            next_state = envmanager.get_state()
+            next_observation = envmanager.get_state()
 
-            if counter % 4 == 0 : # Every fourth screenshot is considered
+            if len(phi.memory) % 4 == 0 : # Every fourth screenshot is considered
+
+                if state is None: 
+                    state = torch.zeros([4, 1, 84, 84]) #Initial state
+                next_state = torch.cat(tuple(phi.memory), dim=0)
 
                 memory.add_to_memory(Experience(state, action, reward, next_state))
                 state = next_state
