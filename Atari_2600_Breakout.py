@@ -58,7 +58,7 @@ class AtariBreakoutEnvManager():
 
         return img
 
-    def get_process(self):
+    def get_state(self):
         img = self.env.render("rgb_array").transpose((2, 0, 1))
         # Reshape to (110, 84) and RGB to GrayScale
         img = self.get_transform(img)
@@ -68,11 +68,11 @@ class AtariBreakoutEnvManager():
         return img.unsqueeze(dim=0)
 
     def get_height(self):
-        img = self.get_process()
+        img = self.get_state()
         return img.shape[2]
 
     def get_width(self):
-        img = self.get_process()
+        img = self.get_state()
         return img.shape[3]
 
 
@@ -156,10 +156,10 @@ class Agent():
         self.device = device
 
     def choose_action(self, state, policy_net):
-        epsilon = self.strategy.get_exploration_rate(self.current_step)
+        self.epsilon = self.strategy.get_exploration_rate(self.current_step)
         self.current_step += 1
 
-        if np.random.random() < epsilon:  # Explore
+        if np.random.random() < self.epsilon:  # Explore
             action = random.randrange(self.num_actions)
             return torch.tensor([action]).to(self.device)
         else:  # Exploit
@@ -195,10 +195,13 @@ if __name__ == "__main__":
     target_network.eval()
 
     optimizer = optim.Adam(params=policy_network.parameters(), lr=lr)
+
+    scores= []
     
     for episode in range(num_episodes):
         envmanager.reset()
         state = envmanager.get_state()
+        score = 0
 
         for timestep in count():
             action = agent.choose_action(state, policy_network)
@@ -206,6 +209,9 @@ if __name__ == "__main__":
             next_state = envmanager.get_state()
             memory.add_to_memory(Experience(state, action, reward, next_state))
             state = next_state
+            
+            score += reward
+            scores.append(score)
 
             if memory.can_provide_sample(batch_size):
                 experiences = memory.sample(batch_size)
@@ -222,6 +228,11 @@ if __name__ == "__main__":
                 loss.backward
                 optimizer.step()
 
-
         if episode % target_update == 0:
             target_network.load_state_dict(policy_network.state_dict())
+
+        if episode % 100 == 0:
+            avg_score = np.mean(scores[-100:])
+            print("episode", i, "score %.1f average score %.1f epsilon %.2f" %
+               (score, avg_score, agent.epsilon))
+
