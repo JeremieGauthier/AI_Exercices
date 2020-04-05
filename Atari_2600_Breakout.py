@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 import numpy as np
 
-from collections import namedtuple
+from collections import namedtuple, deque
 from itertools import count
 
 
@@ -38,7 +38,7 @@ class AtariBreakoutEnvManager():
     def get_reward(self, action):
         # Here action must be of type torch.tensor
         _, reward, self.done, _ = self.env.step(action.item())
-        return torch.tensor([tensor]).to(self.device)
+        return torch.tensor([reward]).to(self.device)
 
     def get_transform(self, img):
         img = np.ascontiguousarray(img, dtype=np.float32) / 255
@@ -167,6 +167,22 @@ class Agent():
                 return policy_net(action).argmax(dim=1).to(self.device)
 
 
+class Phi():
+    def __init__(self, max_nb_elements):
+        self.memory = deque()
+        self.counter = 1
+        self.max_nb_elements = max_nb_elements
+
+    def add_to_memory(self, observation):
+        if len(self.memory) >= self.max_nb_elements:
+            diff = (len(self.memory) - self.max_nb_elements) + 1
+            for i in range(diff):
+                self.memory.popleft()
+        self.memory.append(observation)
+
+            
+
+
 if __name__ == "__main__":
     lr = 0.001
     gamma = 0.99
@@ -207,32 +223,35 @@ if __name__ == "__main__":
             action = agent.choose_action(state, policy_network)
             reward = envmanager.get_reward(action)
             next_state = envmanager.get_state()
-            memory.add_to_memory(Experience(state, action, reward, next_state))
-            state = next_state
-            
-            score += reward
-            scores.append(score)
 
-            if memory.can_provide_sample(batch_size):
-                experiences = memory.sample(batch_size)
-                states, actions, rewards, next_states = memory.extract_tensor(
-                    experiences)
+            if counter % 4 == 0 : # Every fourth screenshot is considered
 
-                batch_index = np.arange(batch_size, dtype=np.int32)
-                current_q_value = policy_network.forward(states)[batch_index, actions.type(torch.LongTensor)]
-                next_q_value = target_network.forward(next_states)
-                target_q_value = rewards + gamma * torch.max(next_q_value)[0]
+                memory.add_to_memory(Experience(state, action, reward, next_state))
+                state = next_state
+                
+                score += reward
+                scores.append(score)
 
-                loss = nn.MSELoss(target_q_value, current_q_value).to(device)
-                optimizer.zero_grad()
-                loss.backward
-                optimizer.step()
+                if memory.can_provide_sample(batch_size):
+                    experiences = memory.sample(batch_size)
+                    states, actions, rewards, next_states = memory.extract_tensor(
+                        experiences)
+
+                    batch_index = np.arange(batch_size, dtype=np.int32)
+                    current_q_value = policy_network.forward(states)[batch_index, actions.type(torch.LongTensor)]
+                    next_q_value = target_network.forward(next_states)
+                    target_q_value = rewards + gamma * torch.max(next_q_value)[0]
+
+                    loss = nn.MSELoss(target_q_value, current_q_value).to(device)
+                    optimizer.zero_grad()
+                    loss.backward
+                    optimizer.step()
 
         if episode % target_update == 0:
             target_network.load_state_dict(policy_network.state_dict())
 
         if episode % 100 == 0:
             avg_score = np.mean(scores[-100:])
-            print("episode", i, "score %.1f average score %.1f epsilon %.2f" %
+            print("episode", episode, "score %.1f average score %.1f epsilon %.2f" %
                (score, avg_score, agent.epsilon))
 
