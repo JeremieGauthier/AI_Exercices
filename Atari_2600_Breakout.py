@@ -79,11 +79,11 @@ class AtariBreakoutEnvManager():
 class DQN(nn.Module):
     def __init__(self, num_actions, lr):
         super(DQN, self).__init__()
-
+        
         self.conv1 = nn.Conv2d(
             in_channels=4, out_channels=16, kernel_size=8, stride=4)
         self.conv2 = nn.Conv2d(
-            in_channels=6, out_channels=32, kernel_size=4, stride=2)
+            in_channels=16, out_channels=32, kernel_size=4, stride=2)
 
         # You have to respect the formula ((W-K+2P/S)+1)
         self.fc = nn.Linear(in_features=32*9*9, out_features=256)
@@ -91,15 +91,15 @@ class DQN(nn.Module):
 
 
     def forward(self, state):
-
         # (1) Hidden Conv. Layer
         self.layer1 = F.relu(self.conv1(state))
 
         # (2) Hidden Conv. Layer
-        self.layer2 = F.relu(self.conv1(self.layer1))
-
+        self.layer2 = F.relu(self.conv2(self.layer1))
+        
         # (3) Hidden Linear Layer
-        self.layer3 = self.fc(self.layer2)
+        input_layer3 = self.layer2.reshape(-1, 32*9*9)
+        self.layer3 = self.fc(input_layer3)
 
         # (4) Output
         actions = self.out(self.layer3)
@@ -121,7 +121,7 @@ class ReplayMemory():
         self.count += 1
 
     def extract_tensor(self, experiences):
-        batch = Experience(*zip(experiences))
+        batch = Experience(*zip(*experiences))
 
         states = torch.cat(batch.state)
         actions = torch.cat(batch.action)
@@ -164,7 +164,7 @@ class Agent():
             return torch.tensor([action]).to(self.device)
         else:  # Exploit
             with torch.no_grad():
-                return policy_net(action).argmax(dim=1).to(self.device)
+                return policy_net(state).argmax(dim=1).to(self.device)
 
 
 class Phi(): #Store max_nb_elements consecutive observations
@@ -218,9 +218,9 @@ if __name__ == "__main__":
     
     for episode in range(num_episodes):
         envmanager.reset()
-        observation= envmanager.get_state()
+        init_observation= envmanager.get_state()
         phi.clear_memory()
-        phi.add_to_memory(observation)
+        phi.add_to_memory(init_observation)
 
         score = 0
         state = None
@@ -228,13 +228,14 @@ if __name__ == "__main__":
         for timestep in count():
             action = agent.choose_action(state, policy_network)
             reward = envmanager.get_reward(action)
-            next_observation = envmanager.get_state()
+            observation = envmanager.get_state()
+            phi.add_to_memory(observation)
 
             if len(phi.memory) % 4 == 0 : # Every fourth screenshot is considered
 
                 if state is None: 
-                    state = torch.zeros([4, 1, 84, 84]) #Initial state
-                next_state = torch.cat(tuple(phi.memory), dim=0)
+                    state = torch.zeros([1, 4, 84, 84]) #Initial state
+                next_state = torch.cat(tuple(phi.memory), dim=1) #Stack 4 consecutives observations
 
                 memory.add_to_memory(Experience(state, action, reward, next_state))
                 state = next_state
@@ -244,15 +245,15 @@ if __name__ == "__main__":
 
                 if memory.can_provide_sample(batch_size):
                     experiences = memory.sample(batch_size)
-                    states, actions, rewards, next_states = memory.extract_tensor(
-                        experiences)
+                    states, actions, rewards, next_states = memory.extract_tensor(experiences)
 
                     batch_index = np.arange(batch_size, dtype=np.int32)
                     current_q_value = policy_network.forward(states)[batch_index, actions.type(torch.LongTensor)]
                     next_q_value = target_network.forward(next_states)
-                    target_q_value = rewards + gamma * torch.max(next_q_value)[0]
+                    target_q_value = rewards + gamma * torch.max(next_q_value, dim=1)[0]
 
-                    loss = nn.MSELoss(target_q_value, current_q_value).to(device)
+                    loss = nn.MSELoss()
+                    loss = loss(target_q_value, current_q_value).to(device)
                     optimizer.zero_grad()
                     loss.backward
                     optimizer.step()
