@@ -224,7 +224,7 @@ if __name__ == "__main__":
         phi.add_to_memory(init_observation)
 
         score = 0
-        state = state = torch.zeros([1, 4, 84, 84]) #Initial state
+        state = torch.zeros([1, 4, 84, 84]) #Initial state
 
         for timestep in count():
             action = agent.choose_action(state, policy_network)
@@ -263,8 +263,8 @@ if __name__ == "__main__":
         if episode % target_update == 0:
             target_network.load_state_dict(policy_network.state_dict())
         print("episode : ", episode)
-        if episode % 100 == 0:
-            avg_score = np.mean(scores[-100:])
+        if episode % 20 == 0:
+            avg_score = np.mean(scores[-20:])
             print("episode", episode, "score %.1f average score %.1f epsilon %.2f" %
                (score, avg_score, agent.epsilon))
 
