@@ -185,6 +185,7 @@ class Phi(): #Store max_nb_elements consecutive observations
 
             
 if __name__ == "__main__":
+
     lr = 0.001
     gamma = 0.99
     eps_start = 1
@@ -218,12 +219,12 @@ if __name__ == "__main__":
     
     for episode in range(num_episodes):
         envmanager.reset()
-        init_observation= envmanager.get_state()
         phi.clear_memory()
+        init_observation= envmanager.get_state()
         phi.add_to_memory(init_observation)
 
         score = 0
-        state = None
+        state = state = torch.zeros([1, 4, 84, 84]) #Initial state
 
         for timestep in count():
             action = agent.choose_action(state, policy_network)
@@ -233,8 +234,6 @@ if __name__ == "__main__":
 
             if len(phi.memory) % 4 == 0 : # Every fourth screenshot is considered
 
-                if state is None: 
-                    state = torch.zeros([1, 4, 84, 84]) #Initial state
                 next_state = torch.cat(tuple(phi.memory), dim=1) #Stack 4 consecutives observations
 
                 memory.add_to_memory(Experience(state, action, reward, next_state))
@@ -258,9 +257,12 @@ if __name__ == "__main__":
                     loss.backward
                     optimizer.step()
 
+            if envmanager.done:
+                break
+
         if episode % target_update == 0:
             target_network.load_state_dict(policy_network.state_dict())
-
+        print("episode : ", episode)
         if episode % 100 == 0:
             avg_score = np.mean(scores[-100:])
             print("episode", episode, "score %.1f average score %.1f epsilon %.2f" %
