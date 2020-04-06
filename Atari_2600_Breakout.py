@@ -58,7 +58,7 @@ class AtariBreakoutEnvManager():
 
         return img
 
-    def get_state(self):
+    def get_observation(self):
         img = self.env.render("rgb_array").transpose((2, 0, 1))
         # Reshape to (110, 84) and RGB to GrayScale
         img = self.get_transform(img)
@@ -66,6 +66,12 @@ class AtariBreakoutEnvManager():
         img = self.get_crop(img)
 
         return img.unsqueeze(dim=0)
+
+    def get_initial_state(self): 
+        return torch.zeros([1, 4, 84, 84])
+
+    def get_state(self, stacked_observations):
+        return torch.cat(stacked_observations, dim=1)
 
     def get_height(self):
         img = self.get_state()
@@ -220,21 +226,21 @@ if __name__ == "__main__":
     for episode in range(num_episodes):
         envmanager.reset()
         phi.clear_memory()
-        init_observation= envmanager.get_state()
+        init_observation= envmanager.get_observation()
         phi.add_to_memory(init_observation)
 
         score = 0
-        state = torch.zeros([1, 4, 84, 84]) #Initial state
+        state =  get_initial_state() #Initial state
 
         for timestep in count():
             action = agent.choose_action(state, policy_network)
             reward = envmanager.get_reward(action)
-            observation = envmanager.get_state()
+            observation = envmanager.get_observation()
             phi.add_to_memory(observation)
 
             if len(phi.memory) % 4 == 0 : # Every fourth screenshot is considered
 
-                next_state = torch.cat(tuple(phi.memory), dim=1) #Stack 4 consecutives observations
+                next_state = get_state(tuple(phi.memory)) #Stack 4 consecutives observations
 
                 memory.add_to_memory(Experience(state, action, reward, next_state))
                 state = next_state
@@ -254,7 +260,7 @@ if __name__ == "__main__":
                     loss = nn.MSELoss()
                     loss = loss(target_q_value, current_q_value).to(device)
                     optimizer.zero_grad()
-                    loss.backward
+                    loss.backward()
                     optimizer.step()
 
             if envmanager.done:
@@ -262,7 +268,9 @@ if __name__ == "__main__":
 
         if episode % target_update == 0:
             target_network.load_state_dict(policy_network.state_dict())
-        print("episode : ", episode)
+
+        print("episode :", episode, "epsilon :", agent.epsilon, "score", score)
+
         if episode % 20 == 0:
             avg_score = np.mean(scores[-20:])
             print("episode", episode, "score %.1f average score %.1f epsilon %.2f" %
