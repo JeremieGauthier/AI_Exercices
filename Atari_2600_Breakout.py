@@ -230,7 +230,7 @@ if __name__ == "__main__":
         phi.add_to_memory(init_observation)
 
         score = 0
-        state =  get_initial_state() #Initial state
+        state =  envmanager.get_initial_state() #Initial state
 
         for timestep in count():
             action = agent.choose_action(state, policy_network)
@@ -240,7 +240,7 @@ if __name__ == "__main__":
 
             if len(phi.memory) % 4 == 0 : # Every fourth screenshot is considered
 
-                next_state = get_state(tuple(phi.memory)) #Stack 4 consecutives observations
+                next_state = envmanager.get_state(tuple(phi.memory)) #Stack 4 consecutives observations
 
                 memory.add_to_memory(Experience(state, action, reward, next_state))
                 state = next_state
