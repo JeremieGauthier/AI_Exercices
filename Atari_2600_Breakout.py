@@ -13,6 +13,9 @@ from collections import namedtuple, deque
 from itertools import count
 
 
+Experience = namedtuple('Experience',
+                        ('state', 'action', 'reward', 'next_state'))
+
 class AtariBreakoutEnvManager():
 
     def __init__(self, device):
@@ -58,7 +61,7 @@ class AtariBreakoutEnvManager():
 
         return img
 
-    def get_observation(self):
+    def get_state(self):
         img = self.env.render("rgb_array").transpose((2, 0, 1))
         # Reshape to (110, 84) and RGB to GrayScale
         img = self.get_transform(img)
@@ -67,12 +70,6 @@ class AtariBreakoutEnvManager():
 
         return img.unsqueeze(dim=0)
 
-    def get_initial_state(self): 
-        return torch.zeros([1, 4, 84, 84])
-
-    def get_state(self, stacked_observations):
-        return torch.cat(stacked_observations, dim=1)
-
     def get_height(self):
         img = self.get_state()
         return img.shape[2]
@@ -80,6 +77,52 @@ class AtariBreakoutEnvManager():
     def get_width(self):
         img = self.get_state()
         return img.shape[3]
+
+
+class MaxAndSkipEnv(gym.Wrapper):
+    def __init__(self, env=None, skip=4):
+        """Return only every `skip`-th frame"""
+        super(MaxAndSkipEnv, self).__init__(env)
+        # most recent raw observations (for max pooling across time steps)
+        self._obs_buffer = collections.deque(maxlen=2)
+        self._skip = skip
+
+    def step(self, action):
+        total_reward = 0.0
+        done = None
+        for _ in range(self._skip):
+            obs, reward, done, info = self.env.step(action)
+            self._obs_buffer.append(obs)
+            total_reward += reward
+            if done:
+                break
+        max_frame = np.max(np.stack(self._obs_buffer), axis=0)
+        return max_frame, total_reward, done, info
+
+    def reset(self):
+        """Clear past frame buffer and init. to first obs. from inner env."""
+        self._obs_buffer.clear()
+        obs = self.env.reset()
+        self._obs_buffer.append(obs)
+        return obs
+
+    
+class BufferWrapper(gym.ObservationWrapper):
+    def __init__(self, env, n_steps, dtype=np.float32):
+        super(BufferWrapper, self).__init__(env)
+        self.dtype = dtype
+        old_space = env.observation_space
+        self.observation_space = gym.spaces.Box(old_space.low.repeat(n_steps, axis=0),
+                                                old_space.high.repeat(n_steps, axis=0), dtype=dtype)
+
+    def reset(self):
+        self.buffer = np.zeros_like(self.observation_space.low, dtype=self.dtype)
+        return self.observation(self.env.reset())
+
+    def observation(self, observation):
+        self.buffer[:-1] = self.buffer[1:]
+        self.buffer[-1] = observation
+        return self.buffer
 
 
 class DQN(nn.Module):
@@ -173,23 +216,7 @@ class Agent():
                 return policy_net(state).argmax(dim=1).to(self.device)
 
 
-class Phi(): #Store max_nb_elements consecutive observations
-    def __init__(self, max_nb_elements):
-        self.memory = deque()
-        self.counter = 1
-        self.max_nb_elements = max_nb_elements
 
-    def add_to_memory(self, observation):
-        if len(self.memory) >= self.max_nb_elements:
-            diff = (len(self.memory) - self.max_nb_elements) + 1
-            for i in range(diff):
-                self.memory.popleft()
-        self.memory.append(observation)
-
-    def clear_memory(self):
-        self.memory.clear()
-
-            
 if __name__ == "__main__":
 
     lr = 0.001
@@ -204,8 +231,6 @@ if __name__ == "__main__":
     max_nb_elements = 4
     scores= []
 
-    Experience = namedtuple('Experience',
-                            ('state', 'action', 'reward', 'next_state'))
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -213,7 +238,6 @@ if __name__ == "__main__":
     strategy = EpsilonGreedyStrategy(eps_start, eps_end, eps_decay)
     agent = Agent(envmanager.num_actions(), strategy, device)
     memory = ReplayMemory(capacity)
-    phi = Phi(max_nb_elements)
 
     policy_network = DQN(envmanager.num_actions(), lr).to(device)
     target_network = DQN(envmanager.num_actions(), lr).to(device)
@@ -225,43 +249,37 @@ if __name__ == "__main__":
     
     for episode in range(num_episodes):
         envmanager.reset()
-        phi.clear_memory()
-        init_observation= envmanager.get_observation()
-        phi.add_to_memory(init_observation)
+        state = envmanager.get_state()
 
         score = 0
-        state =  envmanager.get_initial_state() #Initial state
 
         for timestep in count():
             action = agent.choose_action(state, policy_network)
             reward = envmanager.get_reward(action)
-            observation = envmanager.get_observation()
-            phi.add_to_memory(observation)
+            next_state = envmanager.get_state()
 
-            if len(phi.memory) % 4 == 0 : # Every fourth screenshot is considered
+            next_state = envmanager.get_state() #
 
-                next_state = envmanager.get_state(tuple(phi.memory)) #Stack 4 consecutives observations
+            memory.add_to_memory(Experience(state, action, reward, next_state))
+            state = next_state
+            
+            score += reward
+            scores.append(score)
 
-                memory.add_to_memory(Experience(state, action, reward, next_state))
-                state = next_state
-                
-                score += reward
-                scores.append(score)
+            if memory.can_provide_sample(batch_size):
+                experiences = memory.sample(batch_size)
+                states, actions, rewards, next_states = memory.extract_tensor(experiences)
 
-                if memory.can_provide_sample(batch_size):
-                    experiences = memory.sample(batch_size)
-                    states, actions, rewards, next_states = memory.extract_tensor(experiences)
+                batch_index = np.arange(batch_size, dtype=np.int32)
+                current_q_value = policy_network.forward(states)[batch_index, actions.type(torch.LongTensor)]
+                next_q_value = target_network.forward(next_states)
+                target_q_value = rewards + gamma * torch.max(next_q_value, dim=1)[0]
 
-                    batch_index = np.arange(batch_size, dtype=np.int32)
-                    current_q_value = policy_network.forward(states)[batch_index, actions.type(torch.LongTensor)]
-                    next_q_value = target_network.forward(next_states)
-                    target_q_value = rewards + gamma * torch.max(next_q_value, dim=1)[0]
-
-                    loss = nn.MSELoss()
-                    loss = loss(target_q_value, current_q_value).to(device)
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
+                loss = nn.MSELoss()
+                loss = loss(target_q_value, current_q_value).to(device)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
             if envmanager.done:
                 break

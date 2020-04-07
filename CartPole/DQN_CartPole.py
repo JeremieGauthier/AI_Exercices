@@ -125,7 +125,6 @@ class Agent():
             states_ = T.tensor(self.new_state_memory[batch]).to(self.Q_eval.device)
             terminal = T.tensor(self.terminal_state[batch]).to(self.Q_eval.device)
 
-            import ipdb; ipdb.set_trace()
             q_pred = self.Q_eval.forward(states)[batch_index, actions.type(T.LongTensor)]
             q_next = self.Q_next.forward(states_)
             q_next[terminal] = 0.0
@@ -140,6 +139,7 @@ class Agent():
 if __name__ == "__main__":
 
     env = gym.make("CartPole-v1")
+    #env = gym.wrappers.Monitor(env, "recording", force=True)
     n_games = 8000
     scores, eps_history = [], []
    
