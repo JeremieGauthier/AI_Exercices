@@ -1,17 +1,26 @@
-import numpy as np
 import gym
+import time
+import math
+import random
 import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
 import torchvision.transforms as T
+import numpy as np
 
-from collections import deque
+from collections import namedtuple, deque
+from itertools import count
 
-class ProcessFrame84(gym.ObservationWrapper):
 
-    def __init__(self, device, env):
-        super(ProcessFrame84, self).__init__(env)
+Experience = namedtuple('Experience',
+                        ('state', 'action', 'reward', 'next_state'))
 
+class AtariBreakoutEnvManager():
+
+    def __init__(self, device):
         self.device = device
-        self.env = env
+        self.env = gym.make('Breakout-v0').unwrapped
         self.env.reset()
         self.current_screen = None
         self.done = False
@@ -34,40 +43,40 @@ class ProcessFrame84(gym.ObservationWrapper):
         _, reward, self.done, _ = self.env.step(action.item())
         return torch.tensor([reward]).to(self.device)
 
-    def get_transform(self, obs):
-        obs = np.ascontiguousarray(obs, dtype=np.float32) / 255
-        obs = torch.from_numpy(obs)
+    def get_transform(self, img):
+        img = np.ascontiguousarray(img, dtype=np.float32) / 255
+        img = torch.from_numpy(img)
 
         convert = T.Compose([T.ToPILImage(),
                              T.Grayscale(),
                              T.Resize((110, 84)),
                              T.ToTensor()])
 
-        return convert(obs)
+        return convert(img)
 
-    def get_crop(self, obs):
+    def get_crop(self, img):
         top = 17
         bottom = 101
-        obs = obs[:, top:bottom, :]
+        img = img[:, top:bottom, :]
 
-        return obs
+        return img
 
-    def observation(self, obs):
-        obs = obs.transpose((2, 0, 1))
+    def get_state(self):
+        img = self.env.render("rgb_array").transpose((2, 0, 1))
         # Reshape to (110, 84) and RGB to GrayScale
-        obs = self.get_transform(obs)
+        img = self.get_transform(img)
         # Crop top and bottom to obtain shape (84, 84)
-        obs = self.get_crop(obs)
+        img = self.get_crop(img)
 
-        return obs.permute((1, 2, 0)) # obs.shape is (84, 84, 1)
+        return img.unsqueeze(dim=0)
 
     def get_height(self):
-        obs = self.get_state()
-        return obs.shape[2]
+        img = self.get_state()
+        return img.shape[2]
 
     def get_width(self):
-        obs = self.get_state()
-        return obs.shape[3]
+        img = self.get_state()
+        return img.shape[3]
 
 
 class MaxAndSkipEnv(gym.Wrapper):
@@ -75,7 +84,7 @@ class MaxAndSkipEnv(gym.Wrapper):
         """Return only every `skip`-th frame"""
         super(MaxAndSkipEnv, self).__init__(env)
         # most recent raw observations (for max pooling across time steps)
-        self._obs_buffer = deque(maxlen=2)
+        self._obs_buffer = collections.deque(maxlen=2)
         self._skip = skip
 
     def step(self, action):
@@ -99,7 +108,6 @@ class MaxAndSkipEnv(gym.Wrapper):
 
     
 class BufferWrapper(gym.ObservationWrapper):
-
     def __init__(self, env, n_steps, dtype=np.float32):
         super(BufferWrapper, self).__init__(env)
         self.dtype = dtype
@@ -115,13 +123,3 @@ class BufferWrapper(gym.ObservationWrapper):
         self.buffer[:-1] = self.buffer[1:]
         self.buffer[-1] = observation
         return self.buffer
-
-if __name__ == "__main__":
-
-    env = gym.make("Breakout-v0")
-    env = ProcessFrame84("cpu", env)
-    env = MaxAndSkipEnv(env)
-    env = BufferWrapper(env, 4)
-    obs = env.reset()
-
-    env.observation(obs)
