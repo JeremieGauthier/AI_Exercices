@@ -1,3 +1,5 @@
+import wrappers
+
 import gym
 import time
 import math
@@ -65,7 +67,8 @@ class ReplayMemory():
 
         states = torch.cat(batch.state)
         actions = torch.cat(batch.action)
-        rewards = torch.cat(batch.reward)
+        rewards = torch.tensor(batch.reward)
+        #rewards = torch.cat(batch.reward)
         next_actions = torch.cat(batch.next_state)
 
         return (states, actions, rewards, next_actions)
@@ -125,16 +128,15 @@ if __name__ == "__main__":
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    envmanager = AtariBreakoutEnvManager(device)
-    # envmanager = MaxAndSkipEnv(envmanager)
-    # envmanager = BufferWrapper(envmanager, 4)
+    env = wrappers.make_env("Breakout-v0")
 
     strategy = EpsilonGreedyStrategy(eps_start, eps_end, eps_decay)
-    agent = Agent(envmanager.num_actions(), strategy, device)
+
+    agent = Agent(env.action_space.n, strategy, device)
     memory = ReplayMemory(capacity)
 
-    policy_network = DQN(envmanager.num_actions(), lr).to(device)
-    target_network = DQN(envmanager.num_actions(), lr).to(device)
+    policy_network = DQN(env.action_space.n, lr).to(device)
+    target_network = DQN(env.action_space.n, lr).to(device)
 
     target_network.load_state_dict(policy_network.state_dict())
     target_network.eval()
@@ -142,15 +144,16 @@ if __name__ == "__main__":
     optimizer = optim.Adam(params=policy_network.parameters(), lr=lr)
     
     for episode in range(num_episodes):
-        envmanager.reset()
-        state = envmanager.get_state()
-
+        obs = env.reset()
+        state = env.observation(obs)
+        state = torch.tensor(state).unsqueeze(dim=0)
+        
         score = 0
 
         for timestep in count():
             action = agent.choose_action(state, policy_network)
-            reward = envmanager.get_reward(action)
-            next_state = envmanager.get_state()
+            next_state, reward, done, _ = env.step(action) 
+            next_state = torch.tensor(next_state).unsqueeze(dim=0)
             memory.add_to_memory(Experience(state, action, reward, next_state))
             state = next_state
             
@@ -172,7 +175,7 @@ if __name__ == "__main__":
                 loss.backward()
                 optimizer.step()
 
-            if envmanager.done:
+            if done:
                 break
 
         if episode % target_update == 0:
