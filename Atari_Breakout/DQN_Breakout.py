@@ -1,5 +1,5 @@
 import wrappers
-import util
+import utils
 
 import gym
 import time
@@ -151,6 +151,7 @@ if __name__ == "__main__":
         state = torch.tensor(state).unsqueeze(dim=0)
         
         score = 0
+        start = time.time()
 
         for timestep in count():
             action = agent.choose_action(state, policy_network)
@@ -185,7 +186,8 @@ if __name__ == "__main__":
         if episode % target_update == 0:
             target_network.load_state_dict(policy_network.state_dict())
 
-        print("episode :", episode, "epsilon :", agent.epsilon, "score", score)
+        print("episode :", episode, "epsilon :", agent.epsilon, "score", score,
+                "time :", time.time()-start)
 
         if episode % 20 == 0:
             avg_score = np.mean(scores[-20:])
@@ -194,4 +196,4 @@ if __name__ == "__main__":
     
     filename = 'Atari_Breakout_DQN.png'
     x = [i+1 for i in range(num_episodes)]
-    util.plot_learning_curve(x, scores, eps_history, filename)
+    utils.plot_learning_curve(x, scores, eps_history, filename)
