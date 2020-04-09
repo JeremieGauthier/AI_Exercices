@@ -1,4 +1,5 @@
 import wrappers
+import util
 
 import gym
 import time
@@ -119,11 +120,12 @@ if __name__ == "__main__":
     eps_end = 0.01
     eps_decay = 0.001
     target_update = 10
-    num_episodes = 10000
+    num_episodes = 25
     batch_size = 256
     capacity = 1000000
     max_nb_elements = 4
-    scores= []
+
+    scores, eps_history = [], []
 
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -159,6 +161,7 @@ if __name__ == "__main__":
             
             score += reward
             scores.append(score)
+            eps_history.append(agent.epsilon)
 
             if memory.can_provide_sample(batch_size):
                 experiences = memory.sample(batch_size)
@@ -187,4 +190,7 @@ if __name__ == "__main__":
             avg_score = np.mean(scores[-20:])
             print("episode", episode, "score %.1f average score %.1f epsilon %.2f" %
                (score, avg_score, agent.epsilon))
-
+    
+    filename = 'Atari_Breakout_DQN.png'
+    x = [i+1 for i in range(num_episodes)]
+    util.plot_learning_curve(x, scores, eps_history, filename)
