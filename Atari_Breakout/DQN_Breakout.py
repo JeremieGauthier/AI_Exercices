@@ -120,7 +120,7 @@ if __name__ == "__main__":
     eps_end = 0.01
     eps_decay = 0.001
     target_update = 10
-    num_episodes = 25
+    num_episodes = 1000
     batch_size = 256
     capacity = 1000000
     max_nb_elements = 4
@@ -160,8 +160,6 @@ if __name__ == "__main__":
             state = next_state
             
             score += reward
-            scores.append(score)
-            eps_history.append(agent.epsilon)
 
             if memory.can_provide_sample(batch_size):
                 experiences = memory.sample(batch_size)
@@ -180,6 +178,9 @@ if __name__ == "__main__":
 
             if done:
                 break
+
+        scores.append(score)
+        eps_history.append(agent.epsilon)
 
         if episode % target_update == 0:
             target_network.load_state_dict(policy_network.state_dict())

@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
 def plot_learning_curve(x, scores, epsilons, filename):
     
