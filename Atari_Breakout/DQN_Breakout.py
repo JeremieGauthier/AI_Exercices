@@ -42,7 +42,7 @@ class DQN(nn.Module):
         
         # (3) Hidden Linear Layer
         input_layer3 = self.layer2.reshape(-1, 32*9*9)
-        self.layer3 = self.fc(input_layer3)
+        self.layer3 = F.relu(self.fc(input_layer3))
 
         # (4) Output
         actions = self.out(self.layer3)
@@ -185,6 +185,11 @@ if __name__ == "__main__":
 
         if episode % target_update == 0:
             target_network.load_state_dict(policy_network.state_dict())
+        
+        if episode != 0 and episode % 200 == 0:
+            save = {'state_dict': policy_network.state_dict(), 'optimizer': optimizer.state_dict()}
+            torch.save(save, "DQN_model_" + str(episode)+ "_" 
+                       + str(int(score)) + ".pkl")
 
         print("episode :", episode, "epsilon :", agent.epsilon, "score", score,
                 "time :", time.time()-start)
@@ -194,6 +199,8 @@ if __name__ == "__main__":
             print("episode", episode, "score %.1f average score %.1f epsilon %.2f" %
                (score, avg_score, agent.epsilon))
     
-    filename = 'Atari_Breakout_DQN.png'
-    x = [i+1 for i in range(num_episodes)]
-    utils.plot_learning_curve(x, scores, eps_history, filename)
+        if episode % 10 == 0 and episode != 0:
+
+            filename = 'Atari_Breakout_DQN.png'
+            x = [i for i in range(episode+1)]
+            utils.plot_learning_curve(x, scores, eps_history, filename)
