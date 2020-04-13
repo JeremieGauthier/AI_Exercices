@@ -14,10 +14,6 @@ import torchvision.transforms as T
 import numpy as np
 
 from itertools import count
-from collections import namedtuple
-
-Experience = namedtuple("Experience",
-                            ("state", "action", "reward", "next_state"))
 
 class DQN(nn.Module):
     def __init__(self, num_actions, lr):
@@ -88,7 +84,7 @@ if __name__ == "__main__":
             "eps_frame" : 10**5,
             "target_update" : 10,
             "num_episodes" : 1500,
-            "batch_size" : 20,
+            "batch_size" : 32,
             "capacity" : 100000,
             "max_nb_elements" : 4,
         },
@@ -116,13 +112,6 @@ if __name__ == "__main__":
     current_step = 0
 
     for episode in range(params["num_episodes"]):
-        obs = env.reset()
-        state = env.observation(obs)
-        if state.shape == None:
-            import ipdb; ipdb.set_trace()
-
-        state = torch.tensor(state).unsqueeze(dim=0)
-
         score = 0
         start = time.time()
 
@@ -130,15 +119,7 @@ if __name__ == "__main__":
             epsilon_tracker.frame(current_step)
             current_step += 1
 
-            action  = agent(state)[0] #agent.__call__() return action, agent_states
-            new_state, reward, done, _ = env.step(action)
-            new_state = torch.tensor(new_state).unsqueeze(dim=0)
             buffer.populate(1)
-            if new_state.shape == None:
-                import ipdb; ipdb.set_trace()
-            state = new_state
-
-            score += reward
 
             if len(buffer) >= params["batch_size"]:
                 experiences = buffer.sample(params["batch_size"])
@@ -147,7 +128,7 @@ if __name__ == "__main__":
                 batch_index = np.arange(params["batch_size"], dtype=np.int32) 
                 current_q_value = policy_network.forward(states)[batch_index, actions.type(torch.LongTensor)]
                 next_q_value = target_network.target_model(next_states)
-                target_q_value = reward + params["gamma"] * next_q_value.max(1)[0]
+                target_q_value = rewards + params["gamma"] * next_q_value.max(1)[0]
 
                 loss = nn.MSELoss()
                 loss = loss(target_q_value, current_q_value).to(device)
@@ -155,11 +136,7 @@ if __name__ == "__main__":
                 loss.backward()
                 optimizer.step()
 
-            if done:
-               break
-        
-
-        scores.append(score)
+        scores = exp_source.total_rewards
         eps_history.append(action_selector.epsilon)
 
         if episode % params["target_update"] == 0:
