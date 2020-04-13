@@ -13,7 +13,7 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 import numpy as np
 
-from itertools import count
+from torch.utils.tensorboard import SummaryWriter
 
 class DQN(nn.Module):
     def __init__(self, num_actions, lr):
@@ -59,32 +59,37 @@ class EpsilonTracker():
             max(self.eps_end, self.eps_start - current_step / 
                 self.eps_frame)
 
-def extract_tensor(experiences):
-    batch = list(zip(*experiences))
-
-    states = torch.tensor(batch[0], dtype=torch.float32) 
-    actions = torch.tensor(batch[1], dtype=torch.int16) 
-    rewards = torch.tensor(batch[2], dtype=torch.float32) 
-    try:
-        next_states = torch.tensor(batch[3], dtype=torch.float32) 
-    except:
-        import ipdb; ipdb.set_trace()
-        
-    return (states, actions, rewards, next_states)
+    
+def unpack_batch(batch):
+    states, actions, rewards, dones, last_states = [], [], [], [], []
+    for exp in batch:
+        state = np.array(exp.state, copy=False)
+        states.append(state)
+        actions.append(exp.action)
+        rewards.append(exp.reward)
+        dones.append(exp.last_state is None)
+        if exp.last_state is None:
+            last_states.append(state)       # the result will be masked anyway
+        else:
+            last_states.append(np.array(exp.last_state, copy=False))
+    return np.array(states, copy=False), np.array(actions), np.array(rewards, dtype=np.float32), \
+           np.array(dones, dtype=np.bool), np.array(last_states, copy=False)
 
 
 if __name__ == "__main__":
+
     HYPERPARAMS={
         "breakout":{
             "env_name" : "Breakout-v0",
             "learning_rate" : 0.001,
             "gamma" : 0.99,
+            "stop_reward" : 500.0, 
             "eps_start" : 1,
             "eps_end" : 0.01,
             "eps_frame" : 10**5,
             "target_update" : 1000,
             "num_episodes" : 1500,
-            "batch_size" : 256,
+            "batch_size" : 32,
             "capacity" : 100000,
             "max_nb_elements" : 4,
         },
@@ -112,8 +117,6 @@ if __name__ == "__main__":
     current_step = 0
 
     for episode in range(params["num_episodes"]):
-        score = 0
-        start = time.time()
 
         for timestep in range(params["batch_size"]):
             epsilon_tracker.frame(current_step)
@@ -122,22 +125,26 @@ if __name__ == "__main__":
             buffer.populate(1)
 
             if len(buffer) >= params["batch_size"]:
-                experiences = buffer.sample(params["batch_size"])
-                states, actions, rewards, next_states = extract_tensor(experiences)
+                batch = buffer.sample(params["batch_size"])
+                states, actions, rewards, dones, next_states = unpack_batch(batch)
 
-                batch_index = np.arange(params["batch_size"], dtype=np.int32) 
-                current_q_value = policy_network.forward(states)[batch_index, actions.type(torch.LongTensor)]
-                next_q_value = target_network.target_model(next_states)
-                target_q_value = rewards + params["gamma"] * next_q_value.max(1)[0]
+                states = torch.tensor(states).to(device)
+                next_states = torch.tensor(next_states).to(device)
+                actions = torch.tensor(actions).to(device)
+                rewards = torch.tensor(rewards).to(device)
+                done_mask = torch.BoolTensor(dones).to(device)
+
+                current_q_value = policy_network(states).gather(1, actions.unsqueeze(-1)).squeeze(-1)
+                next_q_value = target_network.target_model(next_states).max(1)[0]
+                next_q_value[done_mask] = 0.0
+
+                target_q_value = rewards + params["gamma"] * next_q_value.detach()
 
                 loss = nn.MSELoss()
-                loss = loss(target_q_value, current_q_value).to(device)
+                loss = loss(target_q_value, current_q_value)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-
-        scores = exp_source.total_rewards
-        eps_history.append(action_selector.epsilon)
 
         if episode % params["target_update"] == 0:
             target_network.sync()
@@ -146,17 +153,3 @@ if __name__ == "__main__":
             save = {'state_dict': policy_network.state_dict(), 'optimizer': optimizer.state_dict()}
             torch.save(save, "DQN_model_" + str(episode)+ "_" 
                        + str(int(score)) + ".pkl")
-
-        print("episode :", episode, "epsilon :", action_selector.epsilon, "score", score,
-                "time :", time.time()-start)
-
-        if episode % 20 == 0:
-            avg_score = np.mean(scores[-20:])
-            print("episode", episode, "score %.1f average score %.1f epsilon %.2f" %
-               (score, avg_score, action_selector.epsilon))
-    
-        if episode % 100 == 0 and episode != 0:
-
-            filename = 'Atari_Breakout_DQN.png'
-            x = [i for i in range(episode+1)]
-            utils.plot_learning_curve(x, scores, eps_history, filename)
