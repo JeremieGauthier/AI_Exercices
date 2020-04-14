@@ -13,6 +13,7 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 import numpy as np
 
+from itertools import count
 from torch.utils.tensorboard import SummaryWriter
 
 class DQN(nn.Module):
@@ -120,7 +121,10 @@ if __name__ == "__main__":
     current_step = 0
 
     with utils.RewardTracker(writer, params) as reward_tracker:
-        for episode in range(params["num_episodes"]):
+        # for episode in range(params["num_episodes"]):
+        for episode in count():
+
+            print("Episode : ", episode)
 
             buffer.populate(1)
             epsilon_tracker.frame(current_step)
