@@ -93,7 +93,7 @@ if __name__ == "__main__":
             "batch_size" : 32,
             "replay_initial" : 10000,
             "capacity" : 100000,
-            "max_nb_elements" : 4,
+            "reward_steps" : 2,
         },
     }
 
@@ -113,10 +113,9 @@ if __name__ == "__main__":
     agent = ptan.agent.DQNAgent(policy_network, action_selector, device)
     epsilon_tracker = EpsilonTracker(action_selector, params)
 
-    exp_source  = ptan.experience.ExperienceSourceFirstLast(env, agent, gamma=params["gamma"], steps_count=1)
-    buffer = ptan.experience.ExperienceReplayBuffer(exp_source, buffer_size=params["capacity"])
-
-    writer = SummaryWriter("run")
+    exp_source  = ptan.experience.ExperienceSourceFirstLast(env, agent,
+                  gamma=params["gamma"]**, steps_count=params["reward_steps"])
+    buffer = ptan.experience.ExperienceReplayBuffer(exp_source, buffer_size=params["capacity"]) writer = SummaryWriter("run")
 
     current_step = 0
 
@@ -148,7 +147,8 @@ if __name__ == "__main__":
                 next_q_value = target_network.target_model(next_states).max(1)[0]
                 next_q_value[done_mask] = 0.0
 
-                target_q_value = rewards + params["gamma"] * next_q_value.detach()
+                target_q_value = rewards + params["gamma"]**params["reward_steps"] \
+                    * next_q_value.detach()
 
                 loss = nn.MSELoss()
                 loss = loss(target_q_value, current_q_value)
