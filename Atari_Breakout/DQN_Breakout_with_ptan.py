@@ -90,6 +90,7 @@ if __name__ == "__main__":
             "target_update" : 1000,
             "num_episodes" : 1500,
             "batch_size" : 32,
+            "replay_initial" : 5000,
             "capacity" : 100000,
             "max_nb_elements" : 4,
         },
@@ -114,15 +115,21 @@ if __name__ == "__main__":
     exp_source  = ptan.experience.ExperienceSourceFirstLast(env, agent, gamma=params["gamma"], steps_count=1)
     buffer = ptan.experience.ExperienceReplayBuffer(exp_source, buffer_size=params["capacity"])
 
+    writer = SummaryWriter("run")
+
     current_step = 0
 
-    for episode in range(params["num_episodes"]):
+    with utils.RewardTracker(writer, params) as reward_tracker:
+        for episode in range(params["num_episodes"]):
 
-        for timestep in range(params["batch_size"]):
+            buffer.populate(1)
             epsilon_tracker.frame(current_step)
             current_step += 1
 
-            buffer.populate(1)
+            new_rewards = exp_source.pop_total_rewards()
+            if new_rewards:
+                if reward_tracker.reward(new_rewards[0], current_step, action_selector.epsilon):
+                    break
 
             if len(buffer) >= params["batch_size"]:
                 batch = buffer.sample(params["batch_size"])
@@ -146,10 +153,9 @@ if __name__ == "__main__":
                 loss.backward()
                 optimizer.step()
 
-        if episode % params["target_update"] == 0:
-            target_network.sync()
-        
-        if episode != 0 and episode % 200 == 0:
-            save = {'state_dict': policy_network.state_dict(), 'optimizer': optimizer.state_dict()}
-            torch.save(save, "DQN_model_" + str(episode)+ "_" 
-                       + str(int(score)) + ".pkl")
+            if episode % params["target_update"] == 0:
+                target_network.sync()
+            
+            if episode != 0 and episode % 200 == 0:
+                save = {'state_dict': policy_network.state_dict(), 'optimizer': optimizer.state_dict()}
+                torch.save(save, "DQN_model_" + str(episode) + ".pkl")

@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import time
+import sys
 
 def plot_learning_curve(x, scores, epsilons, filename):
     
@@ -44,18 +46,18 @@ class RewardTracker():
 
     def reward(self, reward, current_frame, epsilon=None):
         self.total_rewards.append(reward)
-        speed = (current_step - self.timestep_frame)/
-                    (time.time() - self.start)
+        speed = (current_frame - self.timestep_frame)\
+            /(time.time() - self.start)
         self.timestep_frame = current_frame
         self.start = time.time()
         mean_reward = np.mean(self.total_rewards[:-100])
 
         epsilon_str = "" if epsilon is None else ", eps %.2f" % epsilon
-        print("%d: done %d games, mean reward %.3f, speed %.2f f/s%s" (
-            frame, len(self.total_rewards), mean_reward, speed, epsilon_str
-        ))
+        print("%d: done %d games, mean reward %.3f, speed %.2f f/s %s" % (
+            current_frame, len(self.total_rewards), mean_reward, 
+            speed, epsilon_str))
 
-        #sys.stdout.flush()
+        sys.stdout.flush()
 
         if epsilon is not None: 
             self.writer.add_scalar("epsilon", epsilon, current_frame)
@@ -64,8 +66,9 @@ class RewardTracker():
             self.writer.add_scalar("reward", reward, current_frame)
         
         if mean_reward > self.stop_reward:
-            print("Solved in %d frames!" % frame)
+            print("Solved in %d frames!" % current_frame)
             return True
+
         return  False
 
         
