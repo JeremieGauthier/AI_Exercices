@@ -1,3 +1,5 @@
+from model import DQN
+
 import wrappers
 import utils
 
@@ -17,39 +19,13 @@ from itertools import count
 from torch.utils.tensorboard import SummaryWriter
 
 """
-It is different from the a basic DQN because of rewards_step = N. It 
-helps to speed up the convergence. 
+In basic DQN, the optimal polcy of the agent is always to choose the best
+action in any given state. The assumption behind the idea is that the best
+action has the best expected Q-value. However, the agent knows nothing 
+about the environment at the beginning. It needs to estimate Q(s,a) and 
+update them at each iteration. Such Q-values have lot of noises and we are
+never sure if the action with maximum expected Q-value is really the best one
 """
-
-class DQN(nn.Module):
-    def __init__(self, num_actions, lr):
-        super(DQN, self).__init__()
-        
-        self.conv1 = nn.Conv2d(
-            in_channels=4, out_channels=16, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(
-            in_channels=16, out_channels=32, kernel_size=4, stride=2)
-
-        # You have to respect the formula ((W-K+2P/S)+1)
-        self.fc = nn.Linear(in_features=32*9*9, out_features=256)
-        self.out = nn.Linear(in_features=256, out_features=num_actions)
-
-
-    def forward(self, state):
-        # (1) Hidden Conv. Layer
-        self.layer1 = F.relu(self.conv1(state))
-
-        # (2) Hidden Conv. Layer
-        self.layer2 = F.relu(self.conv2(self.layer1))
-        
-        # (3) Hidden Linear Layer
-        input_layer3 = self.layer2.reshape(-1, 32*9*9)
-        self.layer3 = F.relu(self.fc(input_layer3))
-
-        # (4) Output
-        actions = self.out(self.layer3)
-
-        return actions
 
 class EpsilonTracker():
     def __init__(self, epsilon_greedy_selector, params):
@@ -86,8 +62,8 @@ if __name__ == "__main__":
 
     HYPERPARAMS={
         "breakout":{
-            "env_name" : "Breakout-v0",
-            "learning_rate" : 0.001,
+            "env_name" : "BreakoutNoFrameskip-v4",
+            "learning_rate" : 0.0001,
             "gamma" : 0.99,
             "stop_reward" : 500.0, 
             "eps_start" : 1,
@@ -98,7 +74,7 @@ if __name__ == "__main__":
             "batch_size" : 32,
             "replay_initial" : 10000,
             "capacity" : 100000,
-            "reward_steps" : 2,
+            "reward_steps" : 1,
         },
     }
 
@@ -108,9 +84,9 @@ if __name__ == "__main__":
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    env = wrappers.make_env("Breakout-v0")
+    env = wrappers.make_env(params["env_name"])
 
-    policy_network = DQN(env.action_space.n, params["learning_rate"]).to(device)
+    policy_network = DQN(env.observation_space.shape, env.action_space.n).to(device)
     target_network = ptan.agent.TargetNet(policy_network)
     optimizer = optim.Adam(policy_network.parameters(), lr=params["learning_rate"])
 
@@ -120,7 +96,7 @@ if __name__ == "__main__":
 
     exp_source  = ptan.experience.ExperienceSourceFirstLast(env, agent,
                   gamma=params["gamma"], steps_count=params["reward_steps"])
-    buffer = ptan.experience.ExperienceReplayBuffer(exp_source, buffer_size=params["capacity"])
+    buffer = ptan.experience.ExperienceReplayBuffer(exp_source, buffer_size=params["capacity"]) 
     writer = SummaryWriter("run")
 
     current_step = 0
@@ -148,10 +124,19 @@ if __name__ == "__main__":
                 done_mask = torch.BoolTensor(dones).to(device)
 
                 current_q_value = policy_network(states).gather(1, actions.unsqueeze(-1)).squeeze(-1)
-                next_q_value = target_network.target_model(next_states).max(1)[0]
+
+                ############################ Double DQN part #############################
+                next_state_actions = policy_network(next_states).max(1)[1]
+                next_q_value = target_network.target_model(next_states).gather(1, 
+                            next_state_actions.unsqueeze(-1)).squeeze(-1)
+
+                # Normally, only the line below is used for that task
+                # next_q_value = target_network.target_model(next_states).max(1)[0]
+                ########################################################################## 
+
                 next_q_value[done_mask] = 0.0
 
-                target_q_value = rewards + params["gamma"]**params["reward_steps"] \
+                target_q_value = rewards + params["gamma"] \
                     * next_q_value.detach()
 
                 loss = nn.MSELoss()
