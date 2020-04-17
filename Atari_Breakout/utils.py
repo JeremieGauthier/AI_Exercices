@@ -33,9 +33,9 @@ class RewardTracker():
 
         if epsilon is not None: 
             self.writer.add_scalar("epsilon", epsilon, current_frame)
-            self.writer.add_scalar("speed", speed, current_frame)
-            self.writer.add_scalar("reward_100", mean_reward, current_frame)
-            self.writer.add_scalar("reward", reward, current_frame)
+        self.writer.add_scalar("speed", speed, current_frame)
+        self.writer.add_scalar("reward_100", mean_reward, current_frame)
+        self.writer.add_scalar("reward", reward, current_frame)
         
         if mean_reward > self.stop_reward:
             print("Solved in %d frames!" % current_frame)
