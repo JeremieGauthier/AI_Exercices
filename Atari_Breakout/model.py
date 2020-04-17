@@ -8,6 +8,7 @@ class DQN(nn.Module):
     def __init__(self, input_shape, num_actions):
         super(DQN, self).__init__()
 
+        import ipdb; ipdb.set_trace()
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels=input_shape[0], out_channels=16, kernel_size=8, stride=4),
             nn.ReLU(),
@@ -39,7 +40,7 @@ class DQN(nn.Module):
 
 class NoisyLinear(nn.Linear): #Independent Gaussian Noise used with NoisyDQN model
     def __init__(self, in_features, out_features, sigma_init=0.017, bias=True):
-        super(NoisyLinear).__init__(in_features, out_features, bias=bias)
+        super(NoisyLinear, self).__init__(in_features, out_features, bias=bias)
 
         self.sigma_weight = nn.Parameter(torch.full((out_features, in_features), sigma_init))
         self.register_buffer("epsilon_weight", torch.zeros(out_features, in_features))
@@ -57,13 +58,12 @@ class NoisyLinear(nn.Linear): #Independent Gaussian Noise used with NoisyDQN mod
 
     def forward(self, input):
         self.epsilon_weight.normal_()
-        self.weight = self.weight + self.sigma_weight * self.epsilon_weight
-        #bias = self.bias
+        weight = self.weight + self.sigma_weight * self.epsilon_weight
         if self.bias is not None:
             self.epsilon_bias.normal_()
-            self.bias = self.bias + self.sigma_bias * self.epsilon_bias
+            bias = self.bias + self.sigma_bias * self.epsilon_bias
         
-        return F.linear(input, self.weight, self.bias)
+        return F.linear(input, weight, bias)
 
 
 class NoisyFactorizedLinear(nn.Linear): #Factorized Gaussian Noise used with NoisyDQN model
@@ -77,7 +77,7 @@ class NoisyFactorizedLinear(nn.Linear): #Factorized Gaussian Noise used with Noi
         self.register_buffer("epsilon_output", torch.zeros((out_features, 1)))
 
         if bias:
-            self.sigma_weight = nn.Parameter(torch.full(out_features,), sigma_init)
+            self.sigma_bias = nn.Parameter(torch.full(out_features,), sigma_init)
 
     def forward(self, input):
         pass
@@ -109,7 +109,7 @@ class NoisyDQN(nn.Module):
         )
 
     def get_output_size(self, input_shape):
-        output = self.conv(tensor.zeros((1, *input_shape)))
+        output = self.conv(torch.zeros((1, *input_shape)))
         return int(np.prod(output.shape))
 
     def forward(self, input):

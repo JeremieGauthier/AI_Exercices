@@ -1,7 +1,6 @@
-from model import DQN
-
 import wrappers
 import utils
+import model
 
 import gym
 import time
@@ -70,7 +69,6 @@ if __name__ == "__main__":
             "eps_end" : 0.05,
             "eps_frame" : 10**5,
             "target_update" : 1000,
-            "num_episodes" : 1500,
             "batch_size" : 32,
             "replay_initial" : 10000,
             "capacity" : 100000,
@@ -86,7 +84,7 @@ if __name__ == "__main__":
 
     env = wrappers.make_env(params["env_name"])
 
-    policy_network = DQN(env.observation_space.shape, env.action_space.n).to(device)
+    policy_network = model.DQN(env.observation_space.shape, env.action_space.n).to(device)
     target_network = ptan.agent.TargetNet(policy_network)
     optimizer = optim.Adam(policy_network.parameters(), lr=params["learning_rate"])
 
@@ -148,6 +146,3 @@ if __name__ == "__main__":
             if episode % params["target_update"] == 0:
                 target_network.sync()
             
-            #if episode != 0 and episode % 200 == 0:
-                #save = {'state_dict': policy_network.state_dict(), 'optimizer': optimizer.state_dict()}
-                #torch.save(save, "DQN_model_" + str(episode) + ".pkl")

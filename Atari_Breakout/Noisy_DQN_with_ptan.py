@@ -5,33 +5,16 @@ import model
 import gym
 import time
 import math
-import random
 import ptan
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
-import torchvision.transforms as T
 import numpy as np
 
 from itertools import count
 from torch.utils.tensorboard import SummaryWriter
 
-class EpsilonTracker():
-    def __init__(self, epsilon_greedy_selector, params):
 
-        self.epsilon_greedy_selector = epsilon_greedy_selector
-        self.eps_start = params["eps_start"]
-        self.eps_end = params["eps_end"]
-        self.eps_frame = params["eps_frame"]
-        self.frame(0)
-    
-    def frame(self, current_step):
-        self.epsilon_greedy_selector.epsilon = \
-            max(self.eps_end, self.eps_start - current_step / 
-                self.eps_frame)
-
-    
 def unpack_batch(batch):
     states, actions, rewards, dones, last_states = [], [], [], [], []
     for exp in batch:
@@ -76,13 +59,12 @@ if __name__ == "__main__":
 
     env = wrappers.make_env(params["env_name"])
 
-    policy_network = model.DQN(env.observation_space.shape, env.action_space.n).to(device)
+    policy_network = model.NoisyDQN(env.observation_space.shape, env.action_space.n).to(device)
     target_network = ptan.agent.TargetNet(policy_network)
     optimizer = optim.Adam(policy_network.parameters(), lr=params["learning_rate"])
 
-    action_selector = ptan.actions.EpsilonGreedyActionSelector(epsilon=params["eps_start"])
+    action_selector = ptan.actions.ArgmaxActionSelector()
     agent = ptan.agent.DQNAgent(policy_network, action_selector, device)
-    epsilon_tracker = EpsilonTracker(action_selector, params)
 
     exp_source  = ptan.experience.ExperienceSourceFirstLast(env, agent, gamma=params["gamma"], steps_count=1)
     buffer = ptan.experience.ExperienceReplayBuffer(exp_source, buffer_size=params["capacity"])
@@ -94,15 +76,12 @@ if __name__ == "__main__":
     with utils.RewardTracker(writer, params) as reward_tracker:
         for episode in count():
 
-            print("Episode : ", episode)
-
             buffer.populate(1)
-            epsilon_tracker.frame(current_step)
             current_step += 1
 
             new_rewards = exp_source.pop_total_rewards()
             if new_rewards:
-                if reward_tracker.reward(new_rewards[0], current_step, action_selector.epsilon):
+                if reward_tracker.reward(new_rewards[0], current_step):
                     break
 
             if len(buffer) >= params["batch_size"]:
