@@ -113,6 +113,7 @@ class NoisyDQN(nn.Module):
         return int(np.prod(output.shape))
 
     def forward(self, input):
+        import ipdb; ipdb.set_trace()
         self.layer1 = self.conv(input)
         self.layer1 = self.layer1.reshape(-1, self.conv_output_size)
 
