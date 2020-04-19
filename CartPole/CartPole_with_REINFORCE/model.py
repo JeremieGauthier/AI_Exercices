@@ -5,10 +5,10 @@ class PGN(nn.Module):
         super(PGN, self).__init__()
 
         self.linear = nn.Sequential(
-            nn.Linear(in_features=input_size, out_features=128),
+            nn.Linear(in_features=input_size[0], out_features=128),
             nn.ReLU(),
             nn.Linear(in_features=128, out_features=num_actions)
         )
     
-    def forward(self, input):
-        return self.linear(intput)
+    def forward(self, state):
+        return self.linear(state.float())
