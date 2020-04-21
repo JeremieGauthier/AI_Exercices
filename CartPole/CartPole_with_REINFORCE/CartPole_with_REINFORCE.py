@@ -11,7 +11,7 @@ import gym
 from torch.utils.tensorboard import SummaryWriter
 
 
-def calc_qvals(rewards):
+def calc_qvals(rewards, gamma):
     res = []
     sum_r = 0.0
     for r in reversed(rewards):
@@ -27,7 +27,7 @@ if __name__ == "__main__":
         "cartpole": {
             "gamma": 0.99,
             "learning_rate": 0.01,
-            "episode_to_traitn": 4
+            "episodes_to_train": 4
         }
     }
 
@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
     PG_network = model.PGN(env.observation_space.shape, env.action_space.n)
 
-    agent = ptan.agent.PolicyAgent(PG_network, ptan.agent.float32_preprocessor,
+    agent = ptan.agent.PolicyAgent(PG_network, preprocessor=ptan.agent.float32_preprocessor,
                                     apply_softmax=True)
     exp_source = ptan.experience.ExperienceSourceFirstLast(env, agent, 
                                     gamma=params["gamma"])
@@ -47,21 +47,21 @@ if __name__ == "__main__":
 
     #########################Initialise the variables###################
     total_rewards = []
+    step = 0
     completed_episodes = 0 #Number of completed episodes
     batch_episodes = 0 #
     current_rewards = [] #Local rewards for the currently-played episode
     batch_states, batch_actions, batch_qvals = [], [], []
     ####################################################################
 
-    import ipdb; ipdb.set_trace()
-
     for step, exp in enumerate(exp_source):
+        
         batch_states.append(exp.state)
-        batch_actions.append(exp.action)
+        batch_actions.append(int(exp.action))
         current_rewards.append(exp.reward)
 
         if exp.last_state is None:
-            batch_qvals.extend(calc_qvals(current_rewards))
+            batch_qvals.extend(calc_qvals(current_rewards, params["gamma"]))
             current_rewards.clear()
             batch_episodes += 1
 
@@ -71,18 +71,20 @@ if __name__ == "__main__":
             reward = new_rewards[0]
             total_rewards.append(reward)
         
-        mean_rewards = float(np.mean(total_rewards[-100:]))
-        print("%d: reward: %6.2f, reward_100: %6.2f, episodes: %d" %
-                (step, reward, mean_rewards, completed_episodes))
-        writer.add_scalar("reward", reward, step)
-        writer.add_scalar("reward_100", mean_rewards, step)
-        if mean_rewards > 195:
-            print("Solved in %d steps and %d episodes!" % 
-                    (step, completed_episodes))
-            break
+            ###################### Track New Rewards ######################
+            mean_rewards = float(np.mean(total_rewards[-100:]))
+            print("%d: reward: %6.2f, reward_100: %6.2f, episodes: %d" %
+                    (step, reward, mean_rewards, completed_episodes))
+            writer.add_scalar("reward", reward, step)
+            writer.add_scalar("reward_100", mean_rewards, step)
+            if mean_rewards > 195:
+                print("Solved in %d steps and %d episodes!" % 
+                        (step, completed_episodes))
+                break
+            ###############################################################
 
-        if batch_episodes >= params["episodes_to_train"]:
-            break
+        if batch_episodes < params["episodes_to_train"]:
+            continue
 
         optimizer.zero_grad()
         states_ts = torch.FloatTensor(batch_states)
@@ -90,14 +92,14 @@ if __name__ == "__main__":
         batch_qvals_ts = torch.FloatTensor(batch_qvals)
 
         logits = PG_network(states_ts)
-        log_prob = F.log_softmax(logits)
-        log_prob_action = batch_qvals * log_prob[range(len(batch_states), batch_actions_ts)]
-        loss = -log_prob_action.mean() #Why taking the mean?
+        log_prob = F.log_softmax(logits, dim=1)
+        log_prob_actions = batch_qvals_ts * log_prob[range(len(batch_states)), batch_actions_ts]
+        loss = -log_prob_actions.mean() #Why taking the mean?
 
         loss.backward()
         optimizer.step()
 
-        batch_episode = 0
+        batch_episodes = 0
         batch_states.clear()
         batch_actions.clear()
         batch_qvals.clear()

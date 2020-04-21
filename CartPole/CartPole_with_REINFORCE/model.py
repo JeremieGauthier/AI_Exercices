@@ -11,4 +11,4 @@ class PGN(nn.Module):
         )
     
     def forward(self, state):
-        return self.linear(state.float())
+        return self.linear(state)
