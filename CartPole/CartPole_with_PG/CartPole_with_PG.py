@@ -22,12 +22,12 @@ def calc_qvals(rewards, gamma):
 if __name__ == "__main__":
     HYPERPARAMS = {
         "cartpole": {
-            "env_nama": "CartPole-v0",
+            "env_name": "CartPole-v0",
             "gamma": 0.99,
             "learning_rate": 0.001,
             "entropy_beta": 0.01,
             "batch_size": 8,
-            "rewards_step": 10
+            "reward_steps": 10
         }
     }
 
@@ -42,8 +42,8 @@ if __name__ == "__main__":
     agent = ptan.agent.PolicyAgent(PG_network, preprocessor=ptan.agent.float32_preprocessor,
                                     apply_softmax=True)
 
-    exp_source = ptan.experience.ExperienceFirstLast(env, agent, 
-                            gamma=params["gamma"], step_count=params["reward_steps"])
+    exp_source = ptan.experience.ExperienceSourceFirstLast(env, agent, 
+                            gamma=params["gamma"], steps_count=params["reward_steps"])
     
     optimizer = optim.Adam(PG_network.parameters(), lr=params["learning_rate"])
 
@@ -89,12 +89,53 @@ if __name__ == "__main__":
             continue
 
         batch_states_ts = torch.FloatTensor(batch_states)
-        batch_actions_ts = torch.IntTensor(batch_actions)
+        batch_actions_ts = torch.LongTensor(batch_actions)
         batch_scales_ts = torch.FloatTensor(batch_scales)
 
         optimizer.zero_grad()
         logits= PG_network(batch_states_ts)
         log_prob = F.log_softmax(logits, dim=1)
-        log_prob_actions = batch_scales_ts * log_prob_v[range(params["batch_size"]), batch_actions_ts]
+        log_prob_actions = batch_scales_ts * log_prob[range(params["batch_size"]), batch_actions_ts]
         loss_policy = -log_prob_actions.mean()
+
+        prob = F.softmax(logits, dim=1)
+        entropy = -(prob * log_prob).sum(dim=1).mean()
+        entropy_loss = params["entropy_beta"] * entropy
+        loss = loss_policy - entropy_loss
+
+        loss.backward()
+        optimizer.step()
+        
+        #Kullback-Leibler Divergence
+        new_logits = PG_network(batch_states_ts)
+        new_prob = F.softmax(new_logits, dim=1)
+        kl_divergence = -((new_prob / prob).log() * prob).sum(dim=1).mean()
+        writer.add_scalar("kl", kl_divergence, step)
+
+        grad_max = 0.0
+        grad_means = 0.0
+        grad_count = 0
+        for p in PG_network.parameters():
+            grad_max = max(grad_max, p.grad.abs().max().item())
+            grad_means += (p.grad ** 2).mean().sqrt().item()
+            grad_count += 1
+
+        writer.add_scalar("baseline", baseline, step)
+        writer.add_scalar("entropy", entropy.item(), step)
+        writer.add_scalar("batch_scales", np.mean(batch_scales), step)
+        writer.add_scalar("loss_entropy", entropy_loss.item(), step)
+        writer.add_scalar("loss_policy", loss_policy.item(), step)
+        writer.add_scalar("loss_total", loss.item(), step)
+        writer.add_scalar("grad_l2", grad_means / grad_count, step)
+        writer.add_scalar("grad_max", grad_max, step)
+
+        batch_states.clear()
+        batch_actions.clear()
+        batch_scales.clear()
+
+
+
+
+
+
 
