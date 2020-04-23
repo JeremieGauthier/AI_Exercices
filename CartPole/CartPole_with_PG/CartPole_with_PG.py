@@ -132,10 +132,3 @@ if __name__ == "__main__":
         batch_states.clear()
         batch_actions.clear()
         batch_scales.clear()
-
-
-
-
-
-
-
