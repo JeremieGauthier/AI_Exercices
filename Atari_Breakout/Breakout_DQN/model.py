@@ -31,8 +31,7 @@ class DQN(nn.Module):
         return int(np.prod(output.shape))
 
     def forward(self, state):
-        self.layer1 = self.conv(state)
-        self.layer1 = self.layer1.reshape(-1, self.conv_output_size)
+        self.layer1 = self.conv(state).reshape(-1, self.conv_output_size)
         
         return self.linear(self.layer1)
 
