@@ -35,9 +35,9 @@ class A2C(nn.Module):
 
     def forward(self, state):
         state = state.float() / 256
-        self.conv_out = self.conv(state).reshape(-1, self.conv_output_size)
+        conv_out = self.conv(state).reshape(-1, self.conv_output_size)
         
-        policy_net = self.actor(self.conv_out)
-        value_net = self.critic(self.conv_out)
+        policy_net = self.actor(conv_out)
+        value_net = self.critic(conv_out)
 
         return policy_net, value_net
