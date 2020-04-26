@@ -17,12 +17,12 @@ if __name__ == "__main__":
     for step in range(num_episodes):
         score=0
         done=False
-        observation = env.reset()
+        state = env.reset()
         while not done:
-            action = agent.choose_action(observation)
-            observation_, reward, done, _ = env.step(action)
+            action = agent.choose_action(state)
+            state_, reward, done, _ = env.step(action)
             score += reward
-            agent.learn(observation, reward, observation_, done)
-            observation = observation_
+            agent.learn(state, reward, state_, done)
+            state = state_
         writer.add_scalar("score", score, step) 
         print("episode :%d, score :%.3f" % (step, score))

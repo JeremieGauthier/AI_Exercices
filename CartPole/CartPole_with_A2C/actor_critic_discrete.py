@@ -37,6 +37,7 @@ class Agent():
                                     n_actions=1)
         
     def choose_action(self, observation):
+        import ipdb; ipdb.set_trace()
         probabilities  = F.softmax(self.actor.forward(observation))
         action_probs = T.distributions.Categorical(probabilities)
         action = action_probs.sample()
