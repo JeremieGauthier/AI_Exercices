@@ -11,7 +11,7 @@ class GenericNetwork(nn.Module):
         self.input_dims = input_dims
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
-        self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
+        self.fc1 = nn.Linear(self.input_dims, self.fc1_dims)
         self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
         self.fc3 = nn.Linear(self.fc2_dims, n_actions)
         self.optimizer = optim.Adam(self.parameters(), lr=self.lr)
@@ -26,38 +26,38 @@ class GenericNetwork(nn.Module):
         return output
 
 
-class Agent():
-    def __init__(self, alpha, beta, input_dims, gamma=0.99, 
-                l1_size=256, l2_size=256, n_actions=2):
-        self.gamma = gamma
-        self.log_probs = None
-        self.actor = GenericNetwork(alpha, input_dims, l1_size, l2_size, 
-                                    n_actions)
-        self.critic = GenericNetwork(beta, input_dims, l1_size, l2_size, 
-                                    n_actions=1)
+# class Agent():
+#     def __init__(self, alpha, beta, input_dims, gamma=0.99, 
+#                 l1_size=256, l2_size=256, n_actions=2):
+#         self.gamma = gamma
+#         self.log_probs = None
+#         self.actor = GenericNetwork(alpha, input_dims, l1_size, l2_size, 
+#                                     n_actions)
+#         self.critic = GenericNetwork(beta, input_dims, l1_size, l2_size, 
+#                                     n_actions=1)
         
-    def choose_action(self, observation):
-        import ipdb; ipdb.set_trace()
-        probabilities  = F.softmax(self.actor.forward(observation))
-        action_probs = T.distributions.Categorical(probabilities)
-        action = action_probs.sample()
-        self.log_probs = action_probs.log_prob(action)
+#     def choose_action(self, observation):
+#         probabilities  = F.softmax(self.actor.forward(observation))
+#         action_probs = T.distributions.Categorical(probabilities)
+#         action = action_probs.sample()
+#         #self.log_probs = action_probs.log_prob(action)
 
-        return action.item()
+#         return action.item()
     
-    def learn(self, state, reward, new_state, done):
-        self.actor.optimizer.zero_grad()
-        self.critic.optimizer.zero_grad()
+#     def learn(self, states, rewards, new_states, dones):
+#         self.actor.optimizer.zero_grad()
+#         self.critic.optimizer.zero_grad()
 
-        critic_value = self.critic.forward(state)
-        critic_value_ = self.critic.forward(new_state)
+#         critic_values = self.critic.forward(states)
+#         critic_values_ = self.critic.forward(new_states)
 
-        delta = ((reward + self.gamma * critic_value_ * (1 - int(done))) - critic_value)
+#         delta = ((rewards + self.gamma * critic_values_ * (1 - int(dones))) - critic_values)
+#         log_prob = F.log_softmax(critic_values, dim=1)
 
-        actor_loss = -1*self.log_probs * delta
-        critic_loss = delta**2
+#         actor_loss = -1*self.log_probs * delta
+#         critic_loss = delta**2
 
-        (actor_loss + critic_loss).backward()
+#         (actor_loss + critic_loss).backward()
 
-        self.actor.optimizer.step()
-        self.critic.optimizer.step()
+#         self.actor.optimizer.step()
+#         self.critic.optimizer.step()
