@@ -1,6 +1,5 @@
 from actor_critic_discrete import GenericNetwork
 
-from gym import wrappers
 from torch.utils.tensorboard import SummaryWriter
 from itertools import count
 
@@ -9,13 +8,13 @@ import numpy as np
 import torch as T
 import gym
 
-def choose_action(network, states):
-    probabilities  = F.softmax(network.forward(states))
+
+def choose_action(network, state):
+    probabilities  = F.softmax(network.forward(state))
     action_probs = T.distributions.Categorical(probabilities)
     action = action_probs.sample()
 
     return action.item()
-
 
 if __name__ == "__main__":
 
@@ -24,59 +23,77 @@ if __name__ == "__main__":
 
     device = T.device("cuda" if T.cuda.is_available() else "cpu")
 
-    actor = GenericNetwork(0.00001, 4, 32, 32, 2)
-    critic = GenericNetwork(0.0005, 4, 32, 2, 1)
+    actor = GenericNetwork(0.0001, 4, 32, 32, 2)
+    critic = GenericNetwork(0.005, 4, 32, 2, 1)
 
-    batch_states, batch_actions, batch_rewards = [], [], []
+    eps_states, eps_actions, eps_rewards = [], [], []
 
+    gamma = 0.99
     batch_size = 8
-    for step in count():
-        score=0
-        done=False
+
+    scores = []
+
+    for episode in count():
+        score = 0
+        q_val = 0
+        done = False
         state = env.reset()
 
+        
         while not done:
             action = choose_action(actor, state)
             state_, reward, done, _ = env.step(action)
+        
+            eps_actions.append(int(action))
+            eps_states.append(state)
+            eps_rewards.append(reward)
 
-            batch_actions.append(action)
-            batch_rewards.append(reward)
-            batch_states.append(state_)
-
-            score += reward            
             state = state_
+            score += reward
 
-            if len(batch_states) < batch_size:
-                continue
-            
-            batch_states_ts = T.FloatTensor(batch_states).to(device=device)
-            batch_actions_ts = T.LongTensor(batch_actions).to(device=device)
-            batch_rewards_ts = T.FloatTensor(batch_rewards).to(device=device)
+            if done:
+              R = 0
+              len_episode = len(eps_actions)
 
-            actor.optimizer.zero_grad()
-            critic.optimizer.zero_grad()
+              actor.optimizer.zero_grad()
+              critic.optimizer.zero_grad()
 
-            critic_values_ts = critic.forward(batch_states)
-            # critic_values_ = critic.forward(new_states)
+              eps_states_ts = T.FloatTensor(eps_states).to(device=device)
+              eps_actions_ts = T.LongTensor(eps_actions).to(device=device)
+              eps_rewards_ts = T.FloatTensor(eps_rewards).to(device=device)
 
-            # delta = ((rewards + gamma * critic_values_ * (1 - int(dones))) - critic_values)
-            delta = batch_rewards_ts - critic_values_ts
+              for i in range(len_episode):
+                time = len_episode - i - 1
 
-            logits = actor(batch_states_ts)
-            log_prob = F.log_softmax(logits, dim=1)
-            log_prob_actions = log_prob[range(batch_size), batch_actions_ts] * delta
+                R *= gamma
+                R += eps_rewards[time]
+                
+                critic_value_time_ts = critic.forward(eps_states_ts[time]).squeeze()
 
-            actor_loss = -log_prob_actions.mean()
-            critic_loss = (delta**2).mean()
+                delta = R - critic_value_time_ts
 
-            (actor_loss + critic_loss).backward()
+                logits = actor(eps_states_ts[time])
+                log_prob = F.log_softmax(logits, dim = 0)
+                log_prob_actions = log_prob[eps_actions_ts[time]] * delta
 
-            actor.optimizer.step()
-            critic.optimizer.step()
+                actor_loss = -log_prob_actions
+                critic_loss = (delta**2)
 
-            batch_states.clear()
-            batch_actions.clear()
-            batch_rewards.clear()
+                (actor_loss + critic_loss).backward()
 
-        writer.add_scalar("score", score, step) 
-        print("episode :%d, score :%.3f" % (step, score))
+                actor.optimizer.step()
+                critic.optimizer.step()
+              
+              eps_states.clear()
+              eps_actions.clear()
+              eps_rewards.clear()
+
+        scores.append(score)
+        mean_score = np.array(scores[-100:])
+        mean_score = np.mean(mean_score)
+
+        writer.add_scalar("score", score, episode) 
+        writer.add_scalar("mean_score", mean_score, episode) 
+
+        if episode % 5 == 0:
+          print("episode :%d, score :%.3f, mean_score :%.3f" % (episode, score, mean_score))
