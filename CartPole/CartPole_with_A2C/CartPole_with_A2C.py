@@ -29,8 +29,6 @@ if __name__ == "__main__":
     eps_states, eps_actions, eps_rewards = [], [], []
 
     gamma = 0.99
-    batch_size = 8
-
     scores = []
 
     for episode in count():

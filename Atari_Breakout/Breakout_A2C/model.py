@@ -26,14 +26,21 @@ class A2C(nn.Module):
         self.critic = nn.Sequential(
             nn.Linear(self.conv_output_size, 128),
             nn.ReLU(),
-            nn.Linear(128, num_actions)
+            nn.Linear(128, 1)
         )
     
     def get_output_size(self, input_size):
         output = self.conv(torch.zeros(1, *input_size))
-        return int(np.prod(*output.shape))
+        return int(np.prod(output.shape))
 
     def forward(self, state):
+
+        if not isinstance(state, torch.Tensor):
+            state = torch.tensor(state)
+
+        if len(state.shape) == 3:
+            state = state.unsqueeze(dim=0)
+
         state = state.float() / 256
         conv_out = self.conv(state).reshape(-1, self.conv_output_size)
         
