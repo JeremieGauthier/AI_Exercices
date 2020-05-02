@@ -11,3 +11,18 @@ class Agent():
         action = action_probs.sample()
 
         return action.item()
+
+class QVals():
+    def __init__(self):
+        self.R = 0.0
+
+    def reset(self):
+        self.R = 0.0
+
+    def calc_qvals(self, rewards, gamma):
+        res = []
+        for r in reversed(rewards):
+            self.R *= gamma
+            self.R += r
+            res.append(self.R)
+        return list(reversed(res))

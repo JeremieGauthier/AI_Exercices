@@ -94,7 +94,7 @@ if __name__ == "__main__":
         logits = PG_network(states_ts)
         log_prob = F.log_softmax(logits, dim=1)
         log_prob_actions = batch_qvals_ts * log_prob[range(len(batch_states)), batch_actions_ts]
-        loss = -log_prob_actions.mean() #Why taking the mean?
+        loss = -log_prob_actions.mean() 
 
         loss.backward()
         optimizer.step()
