@@ -1,16 +1,4 @@
-import torch.nn.functional as F 
-import torch as T
-
-class Agent():
-    def __init__(self, network):
-        self.network = network
-
-    def choose_action(self, state):
-        probabilities  = F.softmax(self.network(state)[0])
-        action_probs = T.distributions.Categorical(probabilities)
-        action = action_probs.sample()
-
-        return action.item()
+from collections import namedtuple
 
 class QVals():
     def __init__(self):
@@ -26,3 +14,23 @@ class QVals():
             self.R += r
             res.append(self.R)
         return list(reversed(res))
+
+    
+Experience = namedtuple("Experience", ("state", "action", "reward", "done"))
+
+
+class ExperienceSource():
+    def __init__(self, env, agent):
+        self.env = env
+        self.agent = agent
+        
+    def __iter__(self):
+
+        obs = self.env.reset()
+        while True:
+
+            action = self.agent.choose_action(obs)
+            state, reward, done, _ = self.env.step(action)
+
+            yield Experience(state, action, reward, done)
+            

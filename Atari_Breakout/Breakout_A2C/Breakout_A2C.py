@@ -1,6 +1,7 @@
 from model import A2C
+from agent import Agent
 from wrappers import make_env
-from utils import Agent, QVals
+from utils import QVals, ExperienceSource
 
 import numpy as np 
 import torch.nn.functional as F
@@ -36,7 +37,8 @@ if __name__ == "__main__":
     net = A2C(env.observation_space.shape, env.action_space.n)
     optimizer = optim.Adam(net.parameters(), lr=params["learning_rate"])
 
-    agent = Agent(net)
+    agent = Agent(net, params["batch_size"], params["entropy_beta"], params["accumulation_steps"])
+    exp_source = ExperienceSource(env, agent)
     
     qvals = QVals()
     batch_states, batch_actions, batch_rewards = [], [], []
@@ -46,24 +48,18 @@ if __name__ == "__main__":
         done = False
         score = 0
         
-        state = env.reset()
         qvals.reset()
-
         optimizer.zero_grad()
-        # for step in count():
-        step=0
-        while not done:
-            step += 1
 
-            action = agent.choose_action(state)
-            state_, reward, done, _ = env.step(action)
+        for step, exp in enumerate(exp_source):
+            if exp.done:
+                break
 
-            batch_states.append(state)
-            batch_actions.append(action)
-            batch_rewards.append(reward)
+            batch_states.append(exp.state)
+            batch_actions.append(exp.action)
+            batch_rewards.append(exp.reward)
 
-            state = state_
-            score += reward
+            score += exp.reward
 
             if len(batch_states) < params["batch_size"]:
                 continue 
@@ -72,27 +68,7 @@ if __name__ == "__main__":
             batch_actions_ts = T.LongTensor(batch_actions).to(device)
             batch_qvals_ts = T.FloatTensor(qvals.calc_qvals(batch_rewards, params["gamma"])).to(device)
             
-            critic_values = net(batch_states_ts)[1].squeeze()
-
-            delta = batch_qvals_ts - critic_values
-
-            logits = net(batch_states_ts)[0]
-            log_probs = F.log_softmax(logits, dim=1)
-            log_prob_actions = delta * log_probs[range(params["batch_size"]), batch_actions_ts]
-
-            probs= F.softmax(logits, dim=1)
-            entropy = -(probs * log_probs).sum(dim=1).mean()
-
-            entropy_loss = -params["entropy_beta"] * entropy
-            actor_loss = -log_prob_actions
-            critic_loss = delta**2
-            
-            loss  = actor_loss + critic_loss + entropy_loss
-            loss.mean().backward()
-
-            if step % params["accumulation_steps"] or done:
-                optimizer.step()
-                optimizer.zero_grad()
+            agent.learn(step, batch_states_ts, batch_actions_ts, batch_qvals_ts, optimizer)
 
             batch_states.clear()
             batch_actions.clear()
