@@ -25,6 +25,7 @@ if __name__ == "__main__":
             "entropy_beta": 0.001,
             "batch_size": 8,
             "accumulation_steps": 10,
+            "reward_steps": 4,
         }
     }
 
