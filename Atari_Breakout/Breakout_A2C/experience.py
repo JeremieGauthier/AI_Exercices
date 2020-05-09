@@ -12,10 +12,10 @@ class ExperienceSource():
         self.env = env
         self.agent = agent
         self.reward_steps = reward_steps
-        self.reward_list = []
+        self.total_reward = []
         
     def __iter__(self):
-
+        current_reward = 0.0
         obs = self.env.reset()
         while True:
             
@@ -23,16 +23,23 @@ class ExperienceSource():
             action = self.agent.choose_action(obs)
             state, reward, done, _ = self.env.step(action)
 
-            self.reward_list.append(reward)
+            current_reward += reward
+
             history.append(Experience(state, action, reward, done))
 
-            if len(history) == self.reward_steps or done:
+            if len(history) == self.reward_steps:
                 yield tuple(history)
+
+            if done: 
+                self.total_reward.append(current_reward)
+                yield tuple(history)
+                current_reward = 0.0
+                
     
-    def pop_new_reward(self):
-        r = self.reward_list
+    def pop_total_reward(self):
+        r = self.total_reward
         if r:
-            self.reward_list.clear()
+            self.total_reward = []
         return r
 
 
@@ -48,7 +55,7 @@ class ExperienceSourceFirstLast(ExperienceSource):
     If we have partial trajectory at the end of episode, last_state will be None
     """
     def __init__(self, env, agent, gamma, reward_steps):
-        super(ExperienceSourceFirstLast, self).__init__(env, agent, gamma, reward_steps+1)
+        super(ExperienceSourceFirstLast, self).__init__(env, agent, reward_steps+1)
 
         self.gamma = gamma
         self.reward_steps = reward_steps

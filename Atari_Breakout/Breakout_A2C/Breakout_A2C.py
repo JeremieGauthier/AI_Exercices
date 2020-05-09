@@ -23,7 +23,7 @@ if __name__ == "__main__":
             "batch_size": 8,
             "accumulation_steps": 10,
             "reward_steps": 4,
-            "stop_reward", 500,
+            "stop_reward": 500,
         }
     }
 
@@ -37,16 +37,17 @@ if __name__ == "__main__":
     optimizer = optim.Adam(net.parameters(), lr=params["learning_rate"])
 
     agent = Agent(net, params["batch_size"], params["entropy_beta"], params["accumulation_steps"])
-    exp_source = ExperienceSourceFirstLast(env, agent, params["gamma"], params["reward_step"])
+    exp_source = ExperienceSourceFirstLast(env, agent, params["gamma"], params["reward_steps"])
     
     batch = []
 
-    optimizer.zero_grad()
     with RewardTracker(writer, stop_reward=params["stop_reward"]) as tracker:
         for step, exp in enumerate(exp_source):
             batch.append(exp)
 
-            new_reward = exp_source.pop_new_reward()
+            #This part is only used to track the total reward.
+            #If new_reward=True, it means the episode is done
+            new_reward = exp_source.pop_total_reward()
             if new_reward:
                 if tracker.reward(new_reward[0], step):
                     break
