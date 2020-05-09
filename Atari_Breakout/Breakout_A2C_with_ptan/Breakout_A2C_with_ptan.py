@@ -59,7 +59,6 @@ class AtariA2C(nn.Module):
     
 def unpack_batch(batch, net, device='cpu'):
 
-    #import ipdb; ipdb.set_trace()
     states, actions, rewards = [], [], []
     not_done_idx = []
     last_states = []

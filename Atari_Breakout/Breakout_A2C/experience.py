@@ -1,3 +1,6 @@
+import torch as T
+import numpy as np
+
 from collections import namedtuple
 
 
@@ -62,3 +65,34 @@ class ExperienceSourceFirstLast(ExperienceSource):
 
             yield ExperienceFirstLast(exp[0].state, action=exp[0].action,
                                       reward=total_reward, last_state=last_state)
+
+
+def unpack_batch(batch, net, gamma, reward_steps, device):
+    states = []
+    actions = []
+    rewards = []
+    not_done_idx = []
+    last_states = []
+    
+    for idx, exp in enumerate(batch):
+        states.append(np.array(exp.state, copy=False))
+        actions.append(exp.action)
+        rewards.append(exp.reward)
+
+        #if last_state=None, it means the game ends up
+        if exp.last_state is not None:
+            not_done_idx.append(idx)
+            last_states.append(np.array(exp.last_state, copy=False))
+
+    states_ts = T.FloatTensor(states).to(device)
+    actions_ts = T.LongTensor(actions).to(device)
+    rewards_ts = T.FloatTensor(actions).to(device)
+
+    if not_done_idx:
+        last_states_v = T.FloatTensor(last_states).to(device)
+        last_vals_v = net(last_states_v)[1]
+        last_vals_np = last_vals_v.data.cpu().numpy()[:, 0]
+        rewards_ts[not_done_idx] += gamma**reward_steps * last_vals_np
+    ref_vals_v = T.FloatTensor(rewards_ts).to(device)
+
+    return states_ts, actions_ts, ref_vals_v
