@@ -1,7 +1,7 @@
 import torch as T
 import numpy as np
 
-from collections import namedtuple
+from collections import namedtuple, deque
 
 
 Experience = namedtuple("Experience", ("state", "action", "reward", "done"))
@@ -12,24 +12,28 @@ class ExperienceSource():
         self.env = env
         self.agent = agent
         self.reward_steps = reward_steps
+        self.reward_list = []
         
     def __iter__(self):
 
         obs = self.env.reset()
         while True:
             
-            history = []
+            history = deque(maxlen=self.reward_steps)
             action = self.agent.choose_action(obs)
             state, reward, done, _ = self.env.step(action)
 
+            self.reward_list.append(reward)
             history.append(Experience(state, action, reward, done))
 
-            if len(history) == self.reward_steps:
+            if len(history) == self.reward_steps or done:
                 yield tuple(history)
-            
-            if done:
-                yield tuple(history)
-                history.clear()
+    
+    def pop_new_reward(self):
+        r = self.reward_list
+        if r:
+            self.reward_list.clear()
+        return r
 
 
 ExperienceFirstLast = namedtuple("ExperienceFirstLast", ("state", "action", "reward", "last_state"))

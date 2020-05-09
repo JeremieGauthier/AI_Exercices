@@ -23,6 +23,7 @@ if __name__ == "__main__":
             "batch_size": 8,
             "accumulation_steps": 10,
             "reward_steps": 4,
+            "stop_reward", 500,
         }
     }
 
@@ -39,27 +40,22 @@ if __name__ == "__main__":
     exp_source = ExperienceSourceFirstLast(env, agent, params["gamma"], params["reward_step"])
     
     batch = []
-    scores = []
 
-        
     optimizer.zero_grad()
-    for step, exp in enumerate(exp_source):
-        batch.append(exp)
-        
-        if len(batch) < params["batch_size"]:
-            continue 
+    with RewardTracker(writer, stop_reward=params["stop_reward"]) as tracker:
+        for step, exp in enumerate(exp_source):
+            batch.append(exp)
 
-        batch_states_ts, batch_actions_ts, batch_qvals_ts = unpack_batch(batch, net, params["gamma"],
-                                                                          params["reward_steps"], device=device)
-        batch.clear()
+            new_reward = exp_source.pop_new_reward()
+            if new_reward:
+                if tracker.reward(new_reward[0], step):
+                    break
+            
+            if len(batch) < params["batch_size"]:
+                continue 
 
-        agent.learn(step, batch_states_ts, batch_actions_ts, batch_qvals_ts, optimizer)
+            # Output the tuple (batch_states, batch_actions, batch_qvals)
+            batch_args = unpack_batch(batch, net, params["gamma"], params["reward_steps"], device=device)
+            batch.clear()
 
-    scores.append(score)
-    mean_score = np.array(scores[-100:])
-    mean_score = np.mean(mean_score)
-
-    writer.add_scalar("score", score, episode) 
-    writer.add_scalar("mean_score", mean_score, episode) 
-
-    print("episode :%d, score :%.3f, mean_score :%.3f" % (episode, score, mean_score))
+            agent.learn(step, *batch_args, optimizer)
