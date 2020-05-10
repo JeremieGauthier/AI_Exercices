@@ -16,7 +16,6 @@ class Agent():
         return action.item()
     
     def learn(self, step, batch_states, batch_actions, batch_qvals, optimizer):
-
         critic_values = self.network(batch_states)[1].squeeze()
         delta = batch_qvals - critic_values
 
@@ -34,6 +33,6 @@ class Agent():
         loss  = actor_loss + critic_loss + entropy_loss
         loss.mean().backward()
 
-        if step % self.accumulation_steps:
-            optimizer.step()
-            optimizer.zero_grad()
+        # if step % self.accumulation_steps:
+        optimizer.step()
+        optimizer.zero_grad()

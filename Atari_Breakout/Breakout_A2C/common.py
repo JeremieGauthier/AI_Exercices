@@ -22,8 +22,10 @@ class RewardTracker():
         self.writer.add_scalar("score", reward, step) 
         self.writer.add_scalar("mean_score", mean_reward, step) 
 
-        print("done :%d, game :%d, score :%.3f, mean_score :%.3f" % 
-                  (step, len(self.total_rewards), reward, mean_reward))
+        num_games = len(self.total_rewards)
+        if num_games % 100 == 0:
+            print("done :%d, game :%d, reward :%.3f, mean_reward :%.3f" % 
+                    (step+1, len(self.total_rewards), reward, mean_reward))
 
         if mean_reward > self.stop_reward:
             return True

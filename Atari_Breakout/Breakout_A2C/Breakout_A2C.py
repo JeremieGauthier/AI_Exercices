@@ -56,7 +56,9 @@ if __name__ == "__main__":
                 continue 
 
             # Output the tuple (batch_states, batch_actions, batch_qvals)
-            batch_args = unpack_batch(batch, net, params["gamma"], params["reward_steps"], device=device)
+            # batch_args = unpack_batch(batch, net, params["gamma"], params["reward_steps"], device=device)
+            batch_states_ts, batch_actions_ts, batch_qvals_ts = unpack_batch(batch, net, params["gamma"], params["reward_steps"], device=device)
             batch.clear()
 
-            agent.learn(step, *batch_args, optimizer)
+            # agent.learn(step, *batch_args, optimizer)
+            agent.learn(step, batch_states_ts, batch_actions_ts, batch_qvals_ts, optimizer)

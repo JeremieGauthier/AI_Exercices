@@ -16,11 +16,11 @@ class ExperienceSource():
         
     def __iter__(self):
         current_reward = 0.0
-        obs = self.env.reset()
+        state = self.env.reset()
         while True:
             
             history = deque(maxlen=self.reward_steps)
-            action = self.agent.choose_action(obs)
+            action = self.agent.choose_action(state)
             state, reward, done, _ = self.env.step(action)
 
             current_reward += reward
@@ -33,6 +33,8 @@ class ExperienceSource():
             if done: 
                 self.total_reward.append(current_reward)
                 yield tuple(history)
+
+                state = self.env.reset()
                 current_reward = 0.0
                 
     
@@ -97,7 +99,7 @@ def unpack_batch(batch, net, gamma, reward_steps, device):
 
     states_ts = T.FloatTensor(states).to(device)
     actions_ts = T.LongTensor(actions).to(device)
-    rewards_ts = T.FloatTensor(actions).to(device)
+    rewards_ts = T.FloatTensor(rewards).to(device)
 
     if not_done_idx:
         last_states_v = T.FloatTensor(last_states).to(device)
