@@ -29,8 +29,9 @@ class Agent():
         entropy_loss = -self.entropy_beta * entropy
         actor_loss = -log_prob_actions
         critic_loss = delta**2
-        
-        loss  = actor_loss + critic_loss + entropy_loss
+       
+        actor_loss.mean().backward(retain_graph=True)
+        loss  = critic_loss + entropy_loss
         loss.mean().backward()
 
         # if step % self.accumulation_steps:

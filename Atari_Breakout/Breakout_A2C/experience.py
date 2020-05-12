@@ -15,27 +15,28 @@ class ExperienceSource():
         self.total_reward = []
         
     def __iter__(self):
-        current_reward = 0.0
-        state = self.env.reset()
+        current_rewards = [0.0] * len(self.env.envs)
+        histories = [deque(maxlen=self.reward_steps)] * len(self.env.envs)
+
+        states = self.env.reset()
         while True:
-            
-            history = deque(maxlen=self.reward_steps)
-            action = self.agent.choose_action(state)
-            state, reward, done, _ = self.env.step(action)
 
-            current_reward += reward
+            for idx, env in enumerate(self.env.envs):
+                action = self.agent.choose_action(states[idx])
+                state, reward, done, _ = env.step(action)
 
-            history.append(Experience(state, action, reward, done))
+                current_rewards[idx] += reward
+                histories[idx].append(Experience(state, action, reward, done))
 
-            if len(history) == self.reward_steps:
-                yield tuple(history)
+                if len(histories[idx]) == self.reward_steps:
+                    yield tuple(histories[idx])
 
-            if done: 
-                self.total_reward.append(current_reward)
-                yield tuple(history)
+                if done: 
+                    self.total_reward.append(current_rewards[idx])
+                    yield tuple(histories[idx])
 
-                state = self.env.reset()
-                current_reward = 0.0
+                    state = env.reset()
+                    current_rewards[idx] = 0.0
                 
     
     def pop_total_reward(self):
@@ -105,7 +106,7 @@ def unpack_batch(batch, net, gamma, reward_steps, device):
         last_states_v = T.FloatTensor(last_states).to(device)
         last_vals_v = net(last_states_v)[1]
         last_vals_np = last_vals_v.data.cpu().numpy()[:, 0]
-        rewards_ts[not_done_idx] += gamma**reward_steps * last_vals_np
+        rewards_ts[not_done_idx] += (gamma**reward_steps * last_vals_np)[0]
     ref_vals_v = T.FloatTensor(rewards_ts).to(device)
 
     return states_ts, actions_ts, ref_vals_v
