@@ -1,4 +1,5 @@
 import torch.nn.functional as F 
+import torch.nn.utils as nn_utils
 import torch as T
 
 class Agent():
@@ -24,9 +25,8 @@ class Agent():
         log_prob_actions = delta * log_probs[range(self.batch_size), batch_actions]
 
         probs= F.softmax(logits, dim=1)
-        entropy = -(probs * log_probs).sum(dim=1).mean()
+        entropy_loss = self.entropy_beta * (probs * log_probs).sum(dim=1).mean()
 
-        entropy_loss = -self.entropy_beta * entropy
         actor_loss = -log_prob_actions
         critic_loss = delta**2
        
@@ -34,6 +34,6 @@ class Agent():
         loss  = critic_loss + entropy_loss
         loss.mean().backward()
 
-        # if step % self.accumulation_steps:
+        nn_utils.clip_grad_norm_(net.parameters(), 0.1)
         optimizer.step()
         optimizer.zero_grad()

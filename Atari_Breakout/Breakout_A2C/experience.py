@@ -3,9 +3,7 @@ import numpy as np
 
 from collections import namedtuple, deque
 
-
 Experience = namedtuple("Experience", ("state", "action", "reward", "done"))
-
 
 class ExperienceSource():
     def __init__(self, env, agent, reward_steps):
@@ -22,9 +20,9 @@ class ExperienceSource():
         while True:
 
             for idx, env in enumerate(self.env.envs):
-                action = self.agent.choose_action(states[idx])
+                action = self.agent.choose_action(np.array(states[idx], copy=False))
                 state, reward, done, _ = env.step(action)
-
+                
                 current_rewards[idx] += reward
                 histories[idx].append(Experience(state, action, reward, done))
 
@@ -37,6 +35,7 @@ class ExperienceSource():
 
                     state = env.reset()
                     current_rewards[idx] = 0.0
+                    histories[idx].clear()
                 
     
     def pop_total_reward(self):
@@ -61,11 +60,11 @@ class ExperienceSourceFirstLast(ExperienceSource):
         super(ExperienceSourceFirstLast, self).__init__(env, agent, reward_steps+1)
 
         self.gamma = gamma
-        self.reward_steps = reward_steps
+        self.steps = reward_steps
     
     def __iter__(self):
         for exp in super(ExperienceSourceFirstLast, self).__iter__():
-            if exp[-1].done and len(exp) <= self.reward_steps:
+            if exp[-1].done and len(exp) <= self.steps:
                 last_state = None
                 elems = exp
             else:
@@ -81,32 +80,39 @@ class ExperienceSourceFirstLast(ExperienceSource):
                                       reward=total_reward, last_state=last_state)
 
 
-def unpack_batch(batch, net, gamma, reward_steps, device):
+def unpack_batch(batch, net, gamma, reward_steps, device='cpu'):
+    """
+    Convert batch into training tensors
+    :param batch:
+    :param net:
+    :return: states variable, actions tensor, reference values variable
+    """
+
     states = []
     actions = []
     rewards = []
     not_done_idx = []
     last_states = []
-    
     for idx, exp in enumerate(batch):
         states.append(np.array(exp.state, copy=False))
-        actions.append(exp.action)
+        actions.append(int(exp.action))
         rewards.append(exp.reward)
-
-        #if last_state=None, it means the game ends up
         if exp.last_state is not None:
             not_done_idx.append(idx)
             last_states.append(np.array(exp.last_state, copy=False))
 
-    states_ts = T.FloatTensor(states).to(device)
-    actions_ts = T.LongTensor(actions).to(device)
-    rewards_ts = T.FloatTensor(rewards).to(device)
-
+    states_v = T.FloatTensor(np.array(states, copy=False)).to(device)
+    actions_t = T.LongTensor(actions).to(device)
+    # handle rewards
+    rewards_np = np.array(rewards, dtype=np.float32)
+    
     if not_done_idx:
-        last_states_v = T.FloatTensor(last_states).to(device)
+        last_states_v = T.FloatTensor(np.array(last_states, copy=False)).to(device)
         last_vals_v = net(last_states_v)[1]
         last_vals_np = last_vals_v.data.cpu().numpy()[:, 0]
-        rewards_ts[not_done_idx] += (gamma**reward_steps * last_vals_np)[0]
-    ref_vals_v = T.FloatTensor(rewards_ts).to(device)
+        last_vals_np *= gamma ** reward_steps
+        rewards_np[not_done_idx] += last_vals_np
 
-    return states_ts, actions_ts, ref_vals_v
+    ref_vals_v = T.FloatTensor(rewards_np).to(device)
+
+    return states_v, actions_t, ref_vals_v

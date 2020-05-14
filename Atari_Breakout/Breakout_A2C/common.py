@@ -25,13 +25,13 @@ class RewardTracker():
         self.start_frame = frame
         self.start_time = time.time()
 
-        self.writer.add_scalar("score", reward, frame) 
-        self.writer.add_scalar("mean_score", mean_reward, frame) 
+        self.writer.add_scalar("reward", reward, frame) 
+        self.writer.add_scalar("mean_reward", mean_reward, frame) 
 
         num_games = len(self.total_rewards)
         if num_games % 1 == 0:
-            print("done :%d, game :%d, reward :%.3f, mean_reward :%.3f, speed :%.3f" % 
-                    (frame+1, len(self.total_rewards), reward, mean_reward, speed))
+            print("done :%d, game :%d, mean_reward :%.3f, speed :%.3f" % 
+                    (frame+1, len(self.total_rewards), mean_reward, speed))
 
         if mean_reward > self.stop_reward:
             return True

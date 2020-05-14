@@ -1,6 +1,6 @@
 from model import A2C
 from agent import Agent
-from wrappers import make_env, GymEnvVec
+from wrappers import GymEnvVec
 from experience import ExperienceSourceFirstLast, unpack_batch
 from common import RewardTracker
 
@@ -12,8 +12,9 @@ import gym
 from itertools import count
 from torch.utils.tensorboard import SummaryWriter
 
-if __name__ == "__main__":
 
+def main():
+    
     HYPERPARAMS = {
         "breakout": {
             #"env_name": "BreakoutNoFrameskip-v4",
@@ -23,7 +24,7 @@ if __name__ == "__main__":
             "entropy_beta": 0.03,
             "batch_size": 128,
             "accumulation_steps": 10,
-            "n_envs": 1, 
+            "n_envs": 5, 
             "reward_steps": 4,
             "stop_reward": 500,
             "adam_eps": 1e-3,
@@ -60,9 +61,15 @@ if __name__ == "__main__":
             if len(batch) < params["batch_size"]:
                 continue 
 
+            if step >= 10000:
+                break
+            
             # Output the tuple (batch_states, batch_actions, batch_qvals)
             batch_args = unpack_batch(batch, net, params["gamma"], params["reward_steps"], device=device)
             batch.clear()
 
             agent.learn(step, *batch_args, optimizer)
-            
+
+
+if __name__ == "__main__":
+    main()
