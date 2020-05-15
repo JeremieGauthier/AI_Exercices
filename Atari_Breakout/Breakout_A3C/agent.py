@@ -25,6 +25,7 @@ class Agent():
         #Actor Loss
         log_probs = F.log_softmax(logits, dim=1)
         adv = batch_qvals - critic_values.squeeze()
+        import ipdb; ipdb.set_trace()
         log_prob_actions = adv * log_probs[range(self.batch_size), batch_actions]
         actor_loss = -log_prob_actions.mean()
 
