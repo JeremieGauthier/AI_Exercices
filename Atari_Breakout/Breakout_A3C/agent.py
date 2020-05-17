@@ -3,11 +3,10 @@ import torch.nn.utils as nn_utils
 import torch as T
 
 class Agent():
-    def __init__(self, network, batch_size, entropy_beta, accumulation_steps):
+    def __init__(self, network, batch_size, entropy_beta):
         self.network = network
         self.batch_size = batch_size
         self.entropy_beta = entropy_beta
-        self.accumulation_steps = accumulation_steps
 
     def choose_action(self, state):
         probabilities  = F.softmax(self.network(state)[0])

@@ -68,7 +68,20 @@ def main():
             batch_args = unpack_batch(batch, net, params["gamma"], params["reward_steps"], device=device)
             batch.clear()
 
-            agent.learn(step, *batch_args, optimizer)
+            optimizer.zero_grad()
+            kwargs = agent.learn(step, *batch_args, optimizer)
+            
+            writer.add_scalar("advantage",       kwargs["adv"].mean(), step)
+            writer.add_scalar("values",          kwargs["critic_values"].mean(), step)
+            writer.add_scalar("batch_rewards",   kwargs["batch_qvals"].mean(), step)
+            writer.add_scalar("loss_entropy",    kwargs["entropy_loss"], step)
+            writer.add_scalar("loss_policy",     kwargs["actor_loss"], step)
+            writer.add_scalar("loss_value",      kwargs["actor_loss"], step)
+            writer.add_scalar("loss_total",      kwargs["loss"], step)
+            writer.add_scalar("grad_l2",         np.sqrt(np.mean(np.square(kwargs["grads"]))), step)
+            writer.add_scalar("grad_max",        np.max(np.abs(kwargs["grads"])), step)
+            writer.add_scalar("grad_var",        np.var(kwargs["grads"]), step)
+
 
 
 if __name__ == "__main__":

@@ -39,6 +39,11 @@ class ExperienceSource():
                 
     
     def pop_total_reward(self):
+        """
+        This part is only used to track the total reward.
+        If new_reward=True, it means the episode is done
+        """
+        
         r = self.total_reward
         if r:
             self.total_reward = []
@@ -74,7 +79,7 @@ class ExperienceSourceFirstLast(ExperienceSource):
             total_reward = 0.0
             for elem in reversed(elems):
                 total_reward *= self.gamma
-                total_reward *= elem.reward
+                total_reward += elem.reward
 
             yield ExperienceFirstLast(exp[0].state, action=exp[0].action,
                                       reward=total_reward, last_state=last_state)
@@ -107,7 +112,6 @@ def unpack_batch(batch, net, gamma, reward_steps, device='cpu'):
     rewards_np = np.array(rewards, dtype=np.float32)
     
     if not_done_idx:
-        import ipdb; ipdb.set_trace()
         last_states_v = T.FloatTensor(np.array(last_states, copy=False)).to(device)
         last_vals_v = net(last_states_v)[1]
         last_vals_np = last_vals_v.data.cpu().numpy()[:, 0]
@@ -115,5 +119,4 @@ def unpack_batch(batch, net, gamma, reward_steps, device='cpu'):
         rewards_np[not_done_idx] += last_vals_np
 
     ref_vals_v = T.FloatTensor(rewards_np).to(device)
-
     return states_v, actions_t, ref_vals_v

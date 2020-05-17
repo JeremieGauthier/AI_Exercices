@@ -38,7 +38,7 @@ class ExperienceSource():
                     histories[idx].clear()
                 
     
-    def pop_total_reward(self):
+    def pop_total_rewards(self):
         r = self.total_reward
         if r:
             self.total_reward = []

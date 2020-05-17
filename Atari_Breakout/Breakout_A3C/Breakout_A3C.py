@@ -11,6 +11,24 @@ import gym
 
 from itertools import count
 from torch.utils.tensorboard import SummaryWriter
+from collections import namedtuple
+
+TotalReward = namedtuple("TotalReward", field_names="reward")
+
+def data_func(net, batch_size, entropy_beta, env_name, n_envs,
+              gamma, reward_steps, device, train_queue):
+
+    env = GymEnvVec(env_name, n_envs)
+    agent = Agent(net, batch_size, entropy_beta)
+    exp_source = ExperienceSourceFirstLast(env, agent, gamma, reward_steps)
+
+    for exp in exp_source:
+        new_rewards = exp_source.pop_total_rewards()
+        if new_rewards:
+            train_queue.put(TotalReward(reward=np.mean(new_rewards)))
+        train_queue.put(exp)
+
+            
 
 
 def main():
@@ -23,8 +41,8 @@ def main():
             "learning_rate": 0.003,
             "entropy_beta": 0.03,
             "batch_size": 128,
-            "accumulation_steps": 10,
-            "n_envs": 5, 
+            "n_envs": 15,
+            "process_count": 4,
             "reward_steps": 4,
             "stop_reward": 500,
             "adam_eps": 1e-3,
