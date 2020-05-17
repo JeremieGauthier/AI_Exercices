@@ -9,7 +9,9 @@ class ExperienceSource():
     def __init__(self, env, agent, reward_steps):
         self.env = env
         self.agent = agent
-        self.reward_steps = reward_steps
+        #self.reward_steps = reward_steps
+        #Here N-1 = 1
+        self.reward_steps = 1
         self.total_reward = []
         
     def __iter__(self):
