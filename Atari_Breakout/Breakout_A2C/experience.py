@@ -20,22 +20,33 @@ class ExperienceSource():
         while True:
 
             for idx, env in enumerate(self.env.envs):
+                history = histories[idx]
+                state = states[idx]
+                
                 action = self.agent.choose_action(np.array(states[idx], copy=False))
                 new_state, reward, done, _ = env.step(action)
                 
                 current_rewards[idx] += reward
-                histories[idx].append(Experience(new_state, action, reward, done))
+                histories[idx].append(Experience(state, action, reward, done))
 
-                if len(histories[idx]) == self.reward_steps:
-                    yield tuple(histories[idx])
+                if len(history) == self.reward_steps:
+                    yield tuple(history)
 
                 if done: 
                     self.total_reward.append(current_rewards[idx])
-                    yield tuple(histories[idx])
+                    
+                    if 0 < len(history) < self.reward_steps:
+                        yield tuple(history)
 
-                    states = env.reset()
+                    # generate tail of history
+                    while len(history) > 1:
+                        history.popleft()
+                        yield tuple(history)
+
+                    #Reset everything when an episode is completed
+                    states[idx] = env.reset()
                     current_rewards[idx] = 0.0
-                    histories[idx].clear()
+                    history.clear()
                 else:
                     states[idx] = new_state
                 
