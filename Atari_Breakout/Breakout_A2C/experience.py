@@ -14,7 +14,7 @@ class ExperienceSource():
         
     def __iter__(self):
         current_rewards = [0.0] * len(self.env.envs)
-        histories = [deque(maxlen=self.reward_steps)] * len(self.env.envs)
+        histories = [deque(maxlen=self.reward_steps) for i in range(len(self.env.envs))]
 
         states = self.env.reset()
         while True:
@@ -22,10 +22,9 @@ class ExperienceSource():
             for idx, env in enumerate(self.env.envs):
                 action = self.agent.choose_action(np.array(states[idx], copy=False))
                 new_state, reward, done, _ = env.step(action)
-                states[idx] = new_state
                 
                 current_rewards[idx] += reward
-                histories[idx].append(Experience(new_states, action, reward, done))
+                histories[idx].append(Experience(new_state, action, reward, done))
 
                 if len(histories[idx]) == self.reward_steps:
                     yield tuple(histories[idx])
@@ -34,9 +33,11 @@ class ExperienceSource():
                     self.total_reward.append(current_rewards[idx])
                     yield tuple(histories[idx])
 
-                    state = env.reset()
+                    states = env.reset()
                     current_rewards[idx] = 0.0
                     histories[idx].clear()
+                else:
+                    states[idx] = new_state
                 
     
     def pop_total_reward(self):
