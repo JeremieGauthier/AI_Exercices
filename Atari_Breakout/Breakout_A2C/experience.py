@@ -9,9 +9,7 @@ class ExperienceSource():
     def __init__(self, env, agent, reward_steps):
         self.env = env
         self.agent = agent
-        #self.reward_steps = reward_steps
-        #Here N-1 = 1
-        self.reward_steps = 1
+        self.reward_steps = reward_steps
         self.total_reward = []
         
     def __iter__(self):
@@ -23,10 +21,11 @@ class ExperienceSource():
 
             for idx, env in enumerate(self.env.envs):
                 action = self.agent.choose_action(np.array(states[idx], copy=False))
-                state, reward, done, _ = env.step(action)
+                new_state, reward, done, _ = env.step(action)
+                states[idx] = new_state
                 
                 current_rewards[idx] += reward
-                histories[idx].append(Experience(state, action, reward, done))
+                histories[idx].append(Experience(new_states, action, reward, done))
 
                 if len(histories[idx]) == self.reward_steps:
                     yield tuple(histories[idx])

@@ -61,9 +61,6 @@ def main():
             if len(batch) < params["batch_size"]:
                 continue 
 
-            if step >= 10000:
-                break
-            
             # Output the tuple (batch_states, batch_actions, batch_qvals)
             batch_args = unpack_batch(batch, net, params["gamma"], params["reward_steps"], device=device)
             batch.clear()
