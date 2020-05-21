@@ -4,11 +4,10 @@ import torch as T
 import numpy as np
 
 class Agent():
-    def __init__(self, network, batch_size, entropy_beta, accumulation_steps):
+    def __init__(self, network, batch_size, entropy_beta):
         self.network = network
         self.batch_size = batch_size
         self.entropy_beta = entropy_beta
-        self.accumulation_steps = accumulation_steps
 
     def choose_action(self, state):
         probabilities  = F.softmax(self.network(state)[0], dim=-1)
@@ -19,6 +18,8 @@ class Agent():
     
     def learn(self, step, batch_states, batch_actions, batch_qvals, optimizer):
         logits, critic_values = self.network(batch_states)
+
+        # import ipdb; ipdb.set_trace()
 
         #Critic Loss
         critic_loss = F.mse_loss(critic_values.squeeze(-1), batch_qvals)
@@ -42,12 +43,10 @@ class Agent():
         nn_utils.clip_grad_norm_(self.network.parameters(), 0.1)
         optimizer.step()
 
-        #Total Loss
-        loss += actor_loss
+        # #Total Loss
+        # loss += actor_loss
         
-        #Get the gradients to plot it
-        grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
-                                        for p in self.network.parameters()
-                                        if p.grad is not None])
-
-        return locals()
+        # #Get the gradients to plot it
+        # grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
+        #                                 for p in self.network.parameters()
+        #                                 if p.grad is not None])

@@ -27,12 +27,22 @@ def data_func(net, device, train_queue, batch_size, entropy_beta,
     exp_source = ExperienceSourceFirstLast(env, agent, gamma, reward_steps)
 
     for exp in exp_source:
-        new_rewards = exp_source.pop_total_rewards()
+        new_rewards = exp_source.pop_total_reward()
         if new_rewards:
             train_queue.put(TotalReward(reward=np.mean(new_rewards)))
         train_queue.put(exp)
 
 def main():
+    """
+    A3C - Data Parallelism : Agent_0 interacts with Agent_i, for i > 0. Agent_0
+    doesn't choose actions or interact with the environments. He will just learn.
+    Agent_i will interact with the environments and choose actions. Some information
+    are exchange between Agent_0 and Agent_i. 
+    """
+    import ipdb; ipdb.set_trace()
+    mp.set_start_method("spawn")
+
+    #ctx = mp.get_context("spawn")
     
     HYPERPARAMS = {
         "breakout": {
@@ -41,8 +51,8 @@ def main():
             "gamma": 0.99, 
             "learning_rate": 0.003,
             "entropy_beta": 0.03,
-            "batch_size": 128,
-            "n_envs": 15,
+            "batch_size": 32,
+            "n_envs": 10,
             "process_count": 4,
             "reward_steps": 4,
             "stop_reward": 500,
@@ -60,6 +70,8 @@ def main():
     env = make_env()
     net = A2C(env.observation_space.shape, env.action_space.n)
     net.share_memory()
+
+    agent = Agent(net, params["batch_size"], params["entropy_beta"])
     
     optimizer = optim.Adam(net.parameters(), lr=params["learning_rate"], eps=params["adam_eps"])
 
@@ -72,8 +84,35 @@ def main():
                                kwargs={**params})
         data_proc.start()
         data_proc_list.append(data_proc)
+        
+    batch = []
+    step = 0
     
-
-
+    try:
+        with RewardTracker(writer, params["stop_reward"]) as tracker:
+            while True:
+                train_entry = train_queue.get()
+                if isinstance(train_entry, TotalReward):
+                    if tracker.reward(train_entry.reward, step):
+                        break
+                    continue
+                
+                step += 1
+                batch.append(train_entry)
+                if len(batch) < params["batch_size"]:
+                    continue
+                
+                batch_args = unpack_batch(batch, net, params["gamma"], params["reward_steps"], device)
+                batch.clear()
+                
+                optimizer.zero_grad()
+                agent.learn(step, *batch_args, optimizer)
+                
+    finally:
+        for p in data_proc_list:
+            p.terminate()
+            p.join()
+          
 if __name__ == "__main__":
+    mp.set_start_method("spawn")
     main()
