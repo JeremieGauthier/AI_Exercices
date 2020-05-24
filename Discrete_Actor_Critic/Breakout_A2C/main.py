@@ -42,7 +42,7 @@ def main():
     optimizer = optim.Adam(net.parameters(), lr=params["learning_rate"], 
                            eps=params["adam_eps"])
 
-    agent = Agent(net, params["batch_size"], params["entropy_beta"], params["accumulation_steps"])
+    agent = Agent(net, params["batch_size"], params["entropy_beta"])
     exp_source = ExperienceSourceFirstLast(env, agent, params["gamma"], params["reward_steps"])
     
     batch = []
