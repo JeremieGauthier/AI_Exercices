@@ -13,6 +13,7 @@ class Agent():
         probabilities  = F.softmax(self.network(state)[0], dim=-1)
         action_probs = T.distributions.Categorical(probabilities)
         action = action_probs.sample()
+        import ipdb; ipdb.set_trace()
 
         return action.item()
     

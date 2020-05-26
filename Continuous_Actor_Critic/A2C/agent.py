@@ -1,48 +1,51 @@
-import torch.nn.functional as F 
-import torch.nn.utils as nn_utils
+import math
 import torch
 import numpy as np
-import math
+import torch.nn.functional as F 
+import torch.nn.utils as nn_utils
+
+def calc_logprob(mu, var, actions):
+    term_1 = -((mu - actions) ** 2) / (2 * var.clamp(min=1e-3))
+    term_2 = - torch.log(torch.sqrt(2 * math.pi * var))
+    return term_1 + term_2
 
 class Agent():
-    def __init__(self, network, batch_size, entropy_beta, num_output):
+    def __init__(self, network, batch_size, entropy_beta):
         self.network = network
         self.batch_size = batch_size
         self.entropy_beta = entropy_beta
-        self.num_output = num_output
 
     def choose_action(self, state):
-        #TODO: Might want to check again
-        mu, sigma = self.network()[:-1]
-        action_probs = torch.distributions.Normal(mu, math.sqrt(sigma))
-        probs= action_probs.sample(sample_shape=torch.Size(self.num_output))
-        action = torch.tanh(probs)
-
-        return action.item()
+        mu, var = self.network(state)[:-1]
+        action_probs = torch.distributions.Normal(mu, torch.sqrt(var))
+        probs= action_probs.sample()
+        #actions_v = torch.tanh(probs) #Using np.clip() is also possible between -1 and 1
+        actions_v = np.clip(probs, -1, 1)
+        actions = actions_v.squeeze(dim=0)
+        actions = actions.data.cpu().numpy()
+        
+        return actions
     
     def learn(self, step, batch_states, batch_actions, batch_qvals, optimizer):
-        logits, critic_values = self.network(batch_states)
+
+        mu, var, critic_values = self.network(batch_states)
 
         #Critic Loss
         critic_loss = F.mse_loss(critic_values.squeeze(-1), batch_qvals)
 
         #Actor Loss
-        log_probs = F.log_softmax(logits, dim=1)
         adv = batch_qvals - critic_values.squeeze(-1).detach()
-        log_prob_actions = adv * log_probs[range(self.batch_size), batch_actions]
+        log_prob_actions = adv.unsqueeze(dim=1) * calc_logprob(mu, var, batch_actions)
         actor_loss = -log_prob_actions.mean()
 
         #Entropy Loss
-        probs= F.softmax(logits, dim=1)
-        entropy_loss = self.entropy_beta * (probs * log_probs).sum(dim=1).mean()
+        entropy_loss = self.entropy_beta * (-(torch.log(2 * math.pi * var) +1 ) / 2).mean()
         
         #Backpropagate
-        actor_loss.backward(retain_graph=True)
-        loss  = critic_loss + entropy_loss
+        loss  = critic_loss + entropy_loss + actor_loss
         loss.backward()
         
         #Update the network
-        nn_utils.clip_grad_norm_(self.network.parameters(), 0.1)
         optimizer.step()
 
         # #Total Loss
